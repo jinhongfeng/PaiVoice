@@ -1,0 +1,19 @@
+{
+  "id": "max-chatgpt-pet",
+  "displayName": "Max",
+  "source": "Codex pet",
+  "description": "A cheerful black-and-white border-collie-inspired pet with bright brown eyes, perked ears, a big smile, and mismatched front paws.",
+  "assets": {
+    "spritesheet": "assets/max-spritesheet.webp"
+  },
+  "spritesheet": {
+    "columns": 8,
+    "rows": 9,
+    "frameWidth": 192,
+    "frameHeight": 208,
+    "width": 1536,
+    "height": 1872
+  },
+  "chatgptStatus": "portable_asset_bundle",
+  "note": "ChatGPT does not currently expose a documented native Codex pet import slot. This bundle preserves Max as a reusable ChatGPT-facing asset for chat attachments, Custom GPT instructions, or a ChatGPT App/web component."
+}

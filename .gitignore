@@ -1,0 +1,33 @@
+# --- 密钥/环境（绝不提交）---
+.env
+.env.*
+!.env.example
+
+# --- 依赖 / 虚拟环境 ---
+node_modules/
+.venv/
+wheels/
+
+# --- Python 产物 ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- 运行时产物（日志 / 数据 / 录音）---
+*.log
+logs/
+data/
+recordings/
+transcripts/
+memories/
+.pet_upgrade_tmp/
+
+# --- 大体积下载产物（可用 tools/models_download.py 重新获取）---
+models/
+
+# --- 音频试听样本（tools/make_voice_samples.py 可再生）---
+试听/
+
+# --- 系统杂项 ---
+.DS_Store
+Thumbs.db

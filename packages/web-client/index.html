@@ -1,0 +1,2045 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171008">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/paivoice-icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/paivoice-icon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/paivoice-icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>PaiVoice · 电话</title>
+<style>
+  :root{
+    --bg1:#171008; --bg2:#2e2110; --bg3:#3d2c13;
+    --gold:#f0c968; --gold-hi:#ffe9ad; --gold-dim:#a8873a; --gold-ink:#241a08;
+    --her:#8fe09a; --txt:#f7edd6; --sub:#c9b48a; --faint:#8a7d63;
+    --glass:rgba(255,244,214,.055); --glass-bd:rgba(240,201,104,.16);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(130% 90% at 50% -10%, var(--bg3) 0%, transparent 55%),
+      radial-gradient(120% 100% at 50% 115%, #241a0b 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg2) 0%, var(--bg1) 58%, #120c05 100%);
+    color:var(--txt); font-family:"PingFang SC","HarmonyOS Sans","Noto Sans SC",system-ui,sans-serif;
+    display:flex; flex-direction:column; overflow:hidden; user-select:none;
+  }
+  /* ---------- 背景：极光雾团 + 暗角 + 颗粒 ---------- */
+  .bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  /* 自定义背景（Wallpaper 壁纸 / 上传 / URL）：双层构图——
+     底层 #bgPhotoBg 同图 cover+blur 铺满全屏补露边，上层 #bgPhoto contain 完整显示不裁切不变形 */
+  #bgPhotoBg{ position:absolute; inset:-40px; background-size:cover; background-position:center;
+    filter:blur(28px) brightness(.75) saturate(1.05); opacity:0; transition:opacity .6s ease; }
+  body.bg-photo #bgPhotoBg{ opacity:1; }
+  #bgPhoto{ position:absolute; inset:0; background-size:contain; background-position:center;
+    background-repeat:no-repeat; opacity:0; transition:opacity .6s ease; }
+  body.bg-photo #bgPhoto{ opacity:1; }
+  /* 视频壁纸层：底层 #bgVideoBg 同源视频静音循环铺满，上层 #bgVideo contain 完整显示 */
+  #bgVideoBg{ position:absolute; inset:-40px; object-fit:cover; filter:blur(28px) brightness(.75);
+    opacity:0; transition:opacity .6s ease; }
+  body.bg-video #bgVideoBg{ opacity:1; }
+  #bgVideo{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+    opacity:0; transition:opacity .6s ease; }
+  body.bg-video #bgVideo{ opacity:1; }
+  body.bg-video #bgPhoto{ opacity:0; }
+  #bgScrim{ position:absolute; inset:0; opacity:0; transition:opacity .6s ease;
+    background:linear-gradient(180deg, rgba(10,6,2,.52), rgba(10,6,2,.22) 45%, rgba(10,6,2,.55)); }
+  body.bg-photo #bgScrim, body.bg-video #bgScrim{ opacity:1; }
+  body.bg-photo .blob, body.bg-video .blob{ opacity:.16; }
+  /* 自定义背景时收敛暗角与颗粒：叠层太多画面会灰蒙发虚 */
+  body.bg-photo .vignette, body.bg-video .vignette{ opacity:.45; }
+  body.bg-photo .grain, body.bg-video .grain{ opacity:.02; }
+  .blob{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; will-change:transform; }
+  .blob.b1{ width:56vmax; height:56vmax; left:-18vmax; top:-20vmax;
+    background:radial-gradient(circle, rgba(240,201,104,.20), transparent 62%); animation:drift1 26s ease-in-out infinite alternate; }
+  .blob.b2{ width:48vmax; height:48vmax; right:-16vmax; bottom:-18vmax;
+    background:radial-gradient(circle, rgba(166,124,52,.22), transparent 62%); animation:drift2 31s ease-in-out infinite alternate; }
+  .blob.b3{ width:34vmax; height:34vmax; left:50%; top:38%; transform:translate(-50%,-50%);
+    background:radial-gradient(circle, rgba(120,200,140,.07), transparent 60%); animation:drift3 21s ease-in-out infinite alternate; }
+  @keyframes drift1{ to{ transform:translate(9vmax,7vmax) scale(1.12); } }
+  @keyframes drift2{ to{ transform:translate(-8vmax,-6vmax) scale(1.08); } }
+  @keyframes drift3{ to{ transform:translate(-50%,-46%) scale(1.15); } }
+  .vignette{ position:absolute; inset:0;
+    background:radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(8,5,1,.55) 100%); }
+  .grain{ position:absolute; inset:0; opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  main, .cfgPanel, #cfgBtnsTop{ position:relative; z-index:1; }
+  main{ display:flex; flex-direction:column; height:100%; }
+
+  /* ---------- 顶部：状态胶囊 ---------- */
+  #topbar{ display:flex; justify-content:center; padding:max(20px, env(safe-area-inset-top)) 16px 4px; }
+  @media (max-width:560px){
+    #topbar{ justify-content:flex-start; padding-left:16px; }
+  }
+  .state-pill{ display:flex; align-items:center; gap:10px; padding:10px 22px; border-radius:999px;
+    background:linear-gradient(180deg, rgba(48,36,16,.72), rgba(28,20,9,.72));
+    border:1px solid var(--glass-bd); box-shadow:0 6px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,235,180,.08);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+  .state-pill .dot{ width:9px; height:9px; border-radius:50%; background:#9aa38b; flex:none;
+    box-shadow:0 0 0 0 rgba(154,163,139,.5); animation:dotpulse 2.4s ease-out infinite; }
+  body[data-state="listening"] .state-pill .dot{ background:#7ee08d; box-shadow:0 0 12px rgba(126,224,141,.75); animation-duration:1.6s; }
+  body[data-state="thinking"] .state-pill .dot,
+  body[data-state="speaking"] .state-pill .dot{ background:var(--gold); box-shadow:0 0 12px rgba(240,201,104,.8); animation-duration:.9s; }
+  body[data-state="hangupSoon"] .state-pill .dot,
+  body[data-state="closed"] .state-pill .dot,
+  body[data-state="autoHangup"] .state-pill .dot{ background:#e08080; box-shadow:0 0 10px rgba(224,128,128,.6); }
+  @keyframes dotpulse{ 0%{ box-shadow:0 0 0 0 rgba(240,201,104,.45);} 70%{ box-shadow:0 0 0 9px rgba(240,201,104,0);} 100%{ box-shadow:0 0 0 0 rgba(240,201,104,0);} }
+  #state{ font-size:15px; font-weight:600; letter-spacing:5px; text-indent:5px; color:var(--gold-hi);
+    text-shadow:0 0 18px rgba(240,201,104,.35); }
+  #lat{ position:fixed; top:70px; right:14px; z-index:15; font-size:11px; letter-spacing:1px; color:var(--gold-dim);
+    padding:5px 10px; border-radius:999px; background:rgba(20,14,6,.55); border:1px solid rgba(240,201,104,.14);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+
+  /* ---------- 舞台：金色声纹圆盘（可拖动 / 双击隐藏） ---------- */
+  #stage{ flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-height:0; }
+  .orb-wrap{ position:relative; display:flex; align-items:center; justify-content:center; animation:floaty 5.5s ease-in-out infinite;
+    touch-action:none; cursor:grab; }
+  .orb-wrap:active{ cursor:grabbing; }
+  .orb-wrap.dragging{ animation-play-state:paused; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(-5px);} 50%{ transform:translateY(6px);} }
+  .ring{ position:absolute; border-radius:50%; width:min(58vw,270px); aspect-ratio:1;
+    border:1.5px solid rgba(240,201,104,.30); opacity:0; transform:scale(1); animation:ping 3.2s cubic-bezier(.2,.6,.35,1) infinite; }
+  .ring#r2{ animation-delay:1.6s; }
+  body[data-state="speaking"] .ring, body[data-state="listening"] .ring{ border-color:rgba(240,201,104,.45); animation-duration:2.1s; }
+  body[data-state="speaking"] .ring#r2{ animation-duration:2.1s; }
+  @keyframes ping{ 0%{ opacity:.85; transform:scale(.92);} 100%{ opacity:0; transform:scale(1.55);} }
+  .orbit{ position:absolute; width:min(74vw,345px); aspect-ratio:1; border-radius:50%;
+    border:1px dashed rgba(240,201,104,.14); animation:spin 16s linear infinite; }
+  .orbit i{ position:absolute; width:5px; height:5px; border-radius:50%; background:var(--gold); opacity:.65;
+    box-shadow:0 0 8px rgba(240,201,104,.8); }
+  .orbit i:nth-child(1){ top:-2.5px; left:calc(50% - 2.5px); }
+  .orbit i:nth-child(2){ bottom:16%; right:-2.5px; width:3.5px; height:3.5px; opacity:.45; }
+  .orbit i:nth-child(3){ top:22%; left:6%; width:3px; height:3px; opacity:.3; }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+  #disc{
+    width:min(58vw,270px); aspect-ratio:1; border-radius:50%; position:relative;
+    background:
+      radial-gradient(circle at 32% 26%, rgba(255,248,220,.9) 0%, rgba(255,248,220,0) 34%),
+      conic-gradient(from 30deg, #f7e8b0, #caa64a, #f2d98a, #b28d3a, #f7e8b0);
+    box-shadow:0 0 70px rgba(232,193,90,.30), 0 14px 44px rgba(0,0,0,.5), inset 0 0 44px rgba(255,255,255,.22);
+    transition:transform .12s ease-out; will-change:transform;
+  }
+  #disc::before{ content:""; position:absolute; inset:0; border-radius:50%;
+    background:conic-gradient(from 0deg, transparent 0 62%, rgba(255,255,255,.55) 74%, transparent 86%);
+    mix-blend-mode:overlay; animation:spin 9s linear infinite; }
+  #disc::after{ content:""; position:absolute; inset:12%; border-radius:50%;
+    border:1px solid rgba(120,86,20,.4);
+    background:
+      repeating-radial-gradient(circle at 50% 46%, rgba(70,48,10,.10) 0 2px, transparent 2px 7px),
+      radial-gradient(circle at 35% 28%, rgba(255,252,238,.55), rgba(255,236,180,.10) 42%, rgba(84,58,14,.52) 100%);
+    box-shadow:inset 0 3px 14px rgba(255,250,225,.35), inset 0 -8px 20px rgba(58,38,6,.5); }
+
+  /* ---------- 桌宠：手绘小动物（部件级骨骼动画：呼吸/眨眼/迈步/扇翅/摆尾，会自己出门溜达） ---------- */
+  :root{ --petSize: clamp(112px, 17vmin, 160px); }
+  #pet{ width:var(--petSize); aspect-ratio:1; position:relative; display:none;
+    filter:drop-shadow(0 10px 12px rgba(0,0,0,.35)); cursor:grab; touch-action:none; }
+  #pet:active{ cursor:grabbing; }
+  body.pet-mode #pet{ display:block; }
+  body.pet-mode #disc, body.pet-mode .ring, body.pet-mode .orbit{ display:none; }
+  body.pet-away .orb-wrap{ display:contents; }          /* 收起空舞台盒，但保留 position:fixed 的漫游宠物 */
+  #pet .p-svg{ width:100%; height:100%; overflow:visible; display:block; }
+  #pet.flip .p-svg{ transform:scaleX(-1); }             /* 朝向：往左走就调头 */
+  #pet.roaming{ position:fixed; left:0; top:0; margin:0; z-index:14; will-change:transform; }
+  #petModes, #petKinds, #petMoods{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
+  .pet-kind-installed{ display:inline-flex; align-items:stretch; }
+  .pet-kind-installed .prof-item{ border-radius:999px 0 0 999px; }
+  .pet-kind-remove{ padding:0 10px; border:1px solid rgba(224,128,110,.28); border-left:0;
+    border-radius:0 999px 999px 0; cursor:pointer; background:rgba(92,37,28,.45); color:#e8b0a0; }
+  .pet-kind-remove:hover{ background:rgba(130,45,32,.65); color:#ffd6ca; }
+
+  /* 部件枢轴：耳朵从根部扇、手脚从上端摆、尾巴从根部摇、整体动作以脚底为轴 */
+  #pet .p-part, #pet .p-all, #pet .p-head, #pet .p-eye, #pet .p-eye-g,
+  #pet .p-tail, #pet .p-ear-l, #pet .p-ear-r, #pet .p-arm-l, #pet .p-arm-r,
+  #pet .p-leg-l, #pet .p-leg-r, #pet .p-wing-l, #pet .p-wing-r,
+  #pet .p-mouth-open, #pet .p-sac, #pet .p-shadow, #pet .p-heart{
+    transform-box:fill-box; transform-origin:center; }
+  #pet .p-all{ transform-origin:50% 88%; }
+  #pet .p-head{ transform-origin:50% 80%; }
+  #pet .p-tail{ transform-origin:14% 82%; }
+  #pet .p-ear-l, #pet .p-ear-r{ transform-origin:50% 88%; }
+  #pet .p-arm-l, #pet .p-arm-r{ transform-origin:50% 10%; }
+  #pet .p-leg-l, #pet .p-leg-r{ transform-origin:50% 6%; }
+  #pet .p-wing-l{ transform-origin:88% 10%; }
+  #pet .p-wing-r{ transform-origin:12% 10%; }
+  #pet .p-mouth-open{ transform-origin:50% 8%; }
+  #pet .p-sac{ transform-origin:50% 26%; }
+  #pet .p-sac{ animation:pSac 3.6s ease-in-out infinite; }
+  #pet .p-shadow{ transition:transform .4s ease; }
+
+  /* 待机：呼吸 + 点头晃脑 + 慢慢摇尾巴 */
+  #pet[data-mood="idle"] .p-all{ animation:pBreath 3.2s ease-in-out infinite; }
+  #pet[data-mood="idle"] .p-head{ animation:pHeadIdle 4.8s ease-in-out infinite; }
+  #pet[data-mood="idle"] .p-tail{ animation:pTailIdle 3.6s ease-in-out infinite; }
+  /* 睡觉：深呼吸 + 歪头 + 闭眼 + Zzz */
+  #pet[data-mood="sleep"] .p-all{ animation:pBreathDeep 4.8s ease-in-out infinite; }
+  #pet[data-mood="sleep"] .p-head{ animation:pHeadSleep 4.8s ease-in-out infinite; }
+  #pet[data-mood="sleep"] .p-tail, #pet[data-mood="sleep"] .p-ear-l, #pet[data-mood="sleep"] .p-ear-r{ animation:none; }
+  #pet[data-mood="sleep"] .p-sac{ animation-duration:5.4s; }
+  #pet[data-mood="sleep"] .p-shadow{ transform:scale(1.14,.86); }
+  /* 走路：整体上下颠 + 四肢交替 + 耳朵颤 */
+  #pet[data-mood="walk"] .p-all{ animation:pBob .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-head{ animation:pHeadBob .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-leg-l{ animation:pStep .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-leg-r{ animation:pStep .42s ease-in-out infinite .21s; }
+  #pet[data-mood="walk"] .p-arm-l{ animation:pSwing .42s ease-in-out infinite .21s; }
+  #pet[data-mood="walk"] .p-arm-r{ animation:pSwing .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-tail{ animation:pTailWag .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-ear-l, #pet[data-mood="walk"] .p-ear-r{ animation:pEarBounce .42s ease-in-out infinite; }
+  /* 开心：蹦跳压扁拉伸 + 挥手 + 张嘴笑 + 快摇尾巴 */
+  #pet[data-mood="happy"] .p-all{ animation:pHop .64s cubic-bezier(.36,.6,.4,1) infinite; }
+  #pet[data-mood="happy"] .p-shadow{ animation:pShadow .64s cubic-bezier(.36,.6,.4,1) infinite; }
+  #pet[data-mood="happy"] .p-arm-l{ animation:pCheerL .64s ease-in-out infinite; }
+  #pet[data-mood="happy"] .p-arm-r{ animation:pCheerR .64s ease-in-out infinite; }
+  #pet[data-mood="happy"] .p-tail{ animation:pTailWag .3s ease-in-out infinite; }
+  #pet[data-mood="happy"] .p-mouth{ display:none; }
+  #pet[data-mood="happy"] .p-mouth-open{ display:block; animation:none; }
+  /* 通话联动：她一说话宠物就跟着蹦、尾巴摇快、眨眼变勤 */
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-all{ animation:pHop .56s cubic-bezier(.36,.6,.4,1) infinite; }
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-shadow{ animation:pShadow .56s cubic-bezier(.36,.6,.4,1) infinite; }
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-tail{ animation:pTailWag .5s ease-in-out infinite; }
+  /* 她说话时张合嘴（青蛙同步鼓喉囊） */
+  #pet .p-mouth-open{ display:none; }
+  #pet.talk .p-mouth{ display:none; }
+  #pet.talk .p-mouth-open{ display:block; animation:pTalk .24s ease-in-out infinite alternate; }
+  #pet.talk .p-sac{ animation-duration:.48s; }
+  /* 鸟：扇翅膀 */
+  #pet[data-mood="walk"] .p-wing-l{ animation:pFlapL .42s ease-in-out infinite; }
+  #pet[data-mood="walk"] .p-wing-r{ animation:pFlapR .42s ease-in-out infinite; }
+  #pet[data-mood="happy"] .p-wing-l{ animation:pFlapL .3s ease-in-out infinite; }
+  #pet[data-mood="happy"] .p-wing-r{ animation:pFlapR .3s ease-in-out infinite; }
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-wing-l{ animation:pFlapL .34s ease-in-out infinite; }
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-wing-r{ animation:pFlapR .34s ease-in-out infinite; }
+  /* 眼睛：眨眼 / 闭眼睡 / 开心眯眼 */
+  #pet .p-eye{ animation:pBlink 4.4s ease-in-out infinite; }
+  body[data-state="speaking"] #pet[data-mood="idle"] .p-eye{ animation-duration:2.2s; }
+  #pet[data-mood="sleep"] .p-eye{ animation:none; transform:scaleY(.08); }
+  #pet[data-mood="sleep"] .p-eye-g{ opacity:.72; }
+  #pet[data-mood="happy"] .p-eye-g{ opacity:0; }
+  #pet .p-eye-happy{ display:none; }
+  #pet[data-mood="happy"] .p-eye-happy{ display:block; }
+  /* 睡觉 Zzz */
+  #pet .p-zzz{ display:none; }
+  #pet[data-mood="sleep"] .p-zzz{ display:block; }
+  #pet[data-mood="sleep"] .p-zzz.z1{ animation:pZzz 3s ease-out infinite; }
+  #pet[data-mood="sleep"] .p-zzz.z2{ animation:pZzz 3s ease-out infinite 1.5s; }
+  /* 小动作（JS 随机触发）：抖耳 / 原地小蹦 / 甩尾 */
+  #pet.act-ear .p-ear-l{ animation:pTwitch .5s ease-in-out 2; }
+  #pet.act-ear .p-ear-r{ animation:pTwitch .5s ease-in-out .26s 2; }
+  #pet.act-hop .p-all{ animation:pMiniHop .54s cubic-bezier(.36,.6,.4,1) 1; }
+  #pet.act-hop .p-shadow{ animation:pShadow .54s cubic-bezier(.36,.6,.4,1) 1; }
+  #pet.act-tail .p-tail{ animation:pTailFlick .8s ease-in-out 2; }
+  /* 被拎起来：腿乱蹬 */
+  #pet.dragging .p-all{ animation:pDangle 1.1s ease-in-out infinite; }
+  #pet.dragging .p-leg-l{ animation:pDangleLeg .9s ease-in-out infinite; }
+  #pet.dragging .p-leg-r{ animation:pDangleLeg .9s ease-in-out infinite .2s; }
+  /* 点它冒出来的爱心 */
+  #pet .p-heart{ animation:pHeart 1.05s ease-out forwards; }
+  /* 精灵图宠物的 HTML 漂浮爱心（没有 SVG 画布可挂，用绝对定位 span） */
+  #pet .p-heart-html{ position:absolute; top:-6px; font-size:18px; color:#f08a92;
+    pointer-events:none; filter:drop-shadow(0 2px 4px rgba(0,0,0,.3)); }
+
+  @keyframes pBreath{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.025,.975);} }
+  @keyframes pBreathDeep{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.05,.93);} }
+  @keyframes pHeadIdle{ 0%,100%{ transform:rotate(0);} 30%{ transform:rotate(2.4deg) translateY(1px);} 70%{ transform:rotate(-2deg);} }
+  @keyframes pHeadSleep{ 0%,100%{ transform:rotate(7deg) translateY(3px);} 50%{ transform:rotate(8.5deg) translateY(5px);} }
+  @keyframes pBob{ 0%,100%{ transform:translateY(0) scale(1);} 25%{ transform:translateY(-5px) scale(1.02,.97);} 50%{ transform:translateY(0) scale(.985,1.02);} 75%{ transform:translateY(-5px) scale(1.02,.97);} }
+  @keyframes pHeadBob{ 0%,100%{ transform:translateY(0);} 25%{ transform:translateY(-2px);} 50%{ transform:translateY(0);} 75%{ transform:translateY(-2px);} }
+  @keyframes pHop{ 0%{ transform:translateY(0) scale(1);} 12%{ transform:translateY(2px) scale(1.12,.84);}
+    32%{ transform:translateY(-26px) scale(.94,1.08);} 56%{ transform:translateY(0) scale(1.14,.84);}
+    72%{ transform:translateY(-7px) scale(.98,1.03);} 100%{ transform:translateY(0) scale(1);} }
+  @keyframes pShadow{ 0%{ transform:scale(1); opacity:1;} 32%{ transform:scale(.72); opacity:.55;}
+    56%{ transform:scale(1.14); opacity:.9;} 72%{ transform:scale(.94); opacity:1;} 100%{ transform:scale(1); opacity:1;} }
+  @keyframes pMiniHop{ 0%{ transform:translateY(0);} 32%{ transform:translateY(-14px) scale(.97,1.04);} 62%{ transform:translateY(0) scale(1.06,.94);} 100%{ transform:translateY(0);} }
+  @keyframes pBlink{ 0%,93.4%,100%{ transform:scaleY(1);} 96%{ transform:scaleY(.08);} }
+  @keyframes pTwitch{ 0%,100%{ transform:rotate(0);} 30%{ transform:rotate(-12deg);} 65%{ transform:rotate(6deg);} }
+  @keyframes pTailIdle{ 0%,100%{ transform:rotate(-6deg);} 50%{ transform:rotate(9deg);} }
+  @keyframes pTailWag{ 0%,100%{ transform:rotate(-11deg);} 50%{ transform:rotate(13deg);} }
+  @keyframes pTailFlick{ 0%,100%{ transform:rotate(0);} 25%{ transform:rotate(17deg);} 60%{ transform:rotate(-9deg);} }
+  @keyframes pStep{ 0%,100%{ transform:translateY(0) rotate(0);} 25%{ transform:translateY(-6.5px) rotate(-9deg);} 60%{ transform:translateY(0) rotate(4deg);} }
+  @keyframes pSwing{ 0%,100%{ transform:rotate(0);} 25%{ transform:rotate(15deg);} 75%{ transform:rotate(-13deg);} }
+  @keyframes pEarBounce{ 0%,100%{ transform:rotate(0);} 25%{ transform:rotate(-5deg) translateY(-1.5px);} 75%{ transform:rotate(4deg);} }
+  @keyframes pCheerL{ 0%,100%{ transform:rotate(-40deg) translateY(-2px);} 50%{ transform:rotate(-28deg) translateY(-5px);} }
+  @keyframes pCheerR{ 0%,100%{ transform:rotate(40deg) translateY(-2px);} 50%{ transform:rotate(28deg) translateY(-5px);} }
+  @keyframes pFlapL{ 0%,100%{ transform:rotate(0);} 50%{ transform:rotate(-26deg);} }
+  @keyframes pFlapR{ 0%,100%{ transform:rotate(0);} 50%{ transform:rotate(26deg);} }
+  @keyframes pTalk{ from{ transform:scaleY(.16);} to{ transform:scaleY(1);} }
+  @keyframes pSac{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.12,.88);} }
+  @keyframes pDangle{ 0%,100%{ transform:rotate(-2.5deg);} 50%{ transform:rotate(2.5deg);} }
+  @keyframes pDangleLeg{ 0%,100%{ transform:rotate(-10deg);} 50%{ transform:rotate(10deg);} }
+  @keyframes pZzz{ 0%{ opacity:0; transform:translate(0,0) scale(.5);} 20%{ opacity:.95;} 100%{ opacity:0; transform:translate(16px,-30px) scale(1.15);} }
+  @keyframes pHeart{ 0%{ opacity:0; transform:translate(0,6px) scale(.3);} 18%{ opacity:1;}
+    100%{ opacity:0; transform:translate(var(--hdx,8px),-44px) scale(1.12);} }
+
+  /* ---------- 桌宠：Codex 精灵图宠物（codex-pet.org 资源，8 列 × 9 行帧图逐格播放） ---------- */
+  #pet.sprite-pet .p-svg{ display:none; }                 /* SVG 手绘画稿让位给精灵图 */
+  #pet.sprite-pet .p-spr{ display:block; width:100%; height:100%;
+    background-repeat:no-repeat; background-size:800% 900%; image-rendering:auto;
+    transform-origin:50% 100%; will-change:transform; }
+  /* 被拎起来：整只轻摆（精灵图没有专门的悬挂帧，用整体摇摆代替乱蹬腿） */
+  #pet.sprite-pet.dragging .p-spr{ animation:pSprDangle .9s ease-in-out infinite; }
+  @keyframes pSprDangle{ 0%,100%{ transform:rotate(-2.5deg);} 50%{ transform:rotate(2.5deg);} }
+  #pet.sprite-pet.flip.dragging .p-spr{ transform:scaleX(-1); }
+  #pet.sprite-pet.dragging{ cursor:grabbing; }
+
+  /* ---------- 字幕：聊天气泡（可拖动 / 双击隐藏） ---------- */
+  #sub{ flex:0 1 auto; width:min(640px, 100%); margin:0 auto; max-height:34vh; overflow-y:auto; padding:6px 18px 10px;
+    display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth;
+    touch-action:none;
+    -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 26px);
+    mask-image:linear-gradient(180deg, transparent 0, #000 26px); }
+  #sub.float-drag{ position:fixed; z-index:12; flex:none; width:min(640px, 92vw); max-height:44vh; margin:0;
+    background:linear-gradient(170deg, rgba(32,23,10,.62), rgba(16,11,4,.62));
+    border:1px solid rgba(240,201,104,.15); border-radius:24px;
+    box-shadow:0 14px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,235,180,.08);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    -webkit-mask-image:none; mask-image:none; cursor:grab; }
+  #sub.float-drag:active{ cursor:grabbing; }
+  #sub.float-drag::before{ content:""; margin-top:auto; }
+  #sub.float-drag.dragging{ scroll-behavior:auto; }
+  .orb-wrap.float-free{ position:fixed; z-index:12; margin:0; }
+  #sub::-webkit-scrollbar{ width:4px; }
+  #sub::-webkit-scrollbar-thumb{ background:rgba(240,201,104,.25); border-radius:2px; }
+  #sub:empty::after{ content:"— 对话从这里开始 —"; text-align:center; color:rgba(200,180,138,.4);
+    font-size:12px; letter-spacing:3px; margin-top:10px; }
+  #sub > div{ max-width:82%; padding:9px 14px; border-radius:16px; font-size:14.5px; line-height:1.6;
+    animation:rise .32s ease-out both; word-break:break-word; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(8px) scale(.97);} to{ opacity:1; transform:none;} }
+  .line-me{ align-self:flex-end; color:#ffe9b8;
+    background:linear-gradient(135deg, rgba(240,201,104,.20), rgba(240,201,104,.09));
+    border:1px solid rgba(240,201,104,.22); border-radius:16px 16px 5px 16px; }
+  .line-en{ align-self:flex-start; font-size:16px; color:#fdf6e3;
+    background:linear-gradient(135deg, rgba(255,244,214,.09), rgba(255,244,214,.045));
+    border:1px solid rgba(255,244,214,.12); border-radius:16px 16px 16px 5px;
+    box-shadow:0 4px 18px rgba(0,0,0,.25); }
+  .line-her{ align-self:flex-start; font-size:13px; color:#a9d8ae;
+    background:rgba(143,224,154,.05); border:1px solid rgba(143,224,154,.13);
+    border-radius:14px 14px 14px 5px; margin-top:-4px; }
+  .line-zh{ align-self:center; font-size:12px; color:#e8b0a0; background:rgba(224,128,110,.08);
+    border:1px solid rgba(224,128,110,.2); border-radius:999px; padding:6px 14px; text-align:center; }
+
+  /* ---------- 打字条 & 控制键 ---------- */
+  #textrow{ display:flex; justify-content:center; padding:2px 18px 12px; }
+  .saybox{ position:relative; width:100%; max-width:560px; }
+  #textrow input{ width:100%; box-sizing:border-box; padding:13px 64px 13px 20px; border-radius:999px;
+    border:1px solid rgba(240,201,104,.2); background:rgba(24,17,8,.66); color:var(--txt); font-size:14px; outline:none;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:border-color .25s, box-shadow .25s; }
+  #textrow input::placeholder{ color:var(--faint); }
+  #textrow input:focus{ border-color:rgba(240,201,104,.55); box-shadow:0 0 0 3px rgba(240,201,104,.12), 0 0 24px rgba(240,201,104,.08); }
+  #typedSend{ position:absolute; right:4px; top:50%; margin-top:-19px; width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink);
+    box-shadow:0 4px 14px rgba(195,156,64,.35), inset 0 1px 0 rgba(255,255,255,.5); transition:transform .15s, box-shadow .2s; }
+  #typedSend:hover{ transform:translateY(-1px); box-shadow:0 6px 18px rgba(195,156,64,.45), inset 0 1px 0 rgba(255,255,255,.5); }
+  #typedSend:active{ transform:scale(.92); }
+  #typedSend svg{ width:18px; height:18px; }
+  #ctrl{ display:flex; justify-content:center; align-items:center; gap:46px; padding:0 0 max(26px, env(safe-area-inset-bottom)); }
+  .btn{ width:68px; height:68px; border-radius:50%; border:none; display:flex;
+        align-items:center; justify-content:center; cursor:pointer; position:relative;
+        touch-action:none; transition:transform .15s, box-shadow .25s, background .25s; }
+  .btn svg{ width:26px; height:26px; }
+  .btn:active{ transform:scale(.9); }
+  /* 按键自由布局：拖离默认位后浮起，固定在屏幕坐标（同圆盘/聊天） */
+  .btn.float-free{ position:fixed; z-index:13; margin:0; cursor:grab; }
+  .btn.float-free.dragging{ transform:none; cursor:grabbing; }
+  /* 打字条自由布局：拖离默认槽后浮起，带同款卡片壳；输入框上也能起步拖动 */
+  #textrow{ touch-action:none; }
+  #textrow.float-free{ position:fixed; z-index:13; margin:0; padding:6px; width:min(560px,92vw); cursor:grab;
+    background:linear-gradient(170deg, rgba(32,23,10,.62), rgba(16,11,4,.62));
+    border:1px solid rgba(240,201,104,.15); border-radius:24px;
+    box-shadow:0 14px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,235,180,.08);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  #textrow.float-free.dragging{ cursor:grabbing; }
+  #mute{ background:linear-gradient(180deg, rgba(84,70,48,.9), rgba(52,42,26,.9));
+    color:#f2e5c4; border:1px solid rgba(240,201,104,.22);
+    box-shadow:0 8px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,240,200,.12); }
+  #mute:hover{ box-shadow:0 10px 28px rgba(0,0,0,.45), 0 0 18px rgba(240,201,104,.12); }
+  #mute .mic-off{ display:none; }
+  #mute.off{ background:rgba(38,30,18,.8); color:#8a7d63; border-color:rgba(240,201,104,.1); }
+  #mute.off .mic{ display:none; } #mute.off .mic-off{ display:block; }
+  #hang{ background:radial-gradient(circle at 34% 30%, #e86555, #b3271b 70%); color:#fff;
+    box-shadow:0 10px 30px rgba(190,45,30,.4), inset 0 1px 0 rgba(255,255,255,.25); }
+  #hang::after{ content:""; position:absolute; inset:-5px; border-radius:50%;
+    border:1.5px solid rgba(226,88,66,.4); animation:hangpulse 2.6s ease-out infinite; }
+  @keyframes hangpulse{ 0%{ transform:scale(.9); opacity:.9;} 100%{ transform:scale(1.35); opacity:0;} }
+  #hang:hover{ box-shadow:0 12px 34px rgba(190,45,30,.55), inset 0 1px 0 rgba(255,255,255,.25); }
+  /* 挂断后的待拨态：绿色 = 点这里重新接通 */
+  #hang.idle{ background:radial-gradient(circle at 34% 30%, #74e287, #1f9d43 70%);
+    box-shadow:0 10px 30px rgba(38,166,80,.42), inset 0 1px 0 rgba(255,255,255,.25); }
+  #hang.idle:hover{ box-shadow:0 12px 34px rgba(38,166,80,.58), inset 0 1px 0 rgba(255,255,255,.25); }
+  #hang.idle::after{ animation:none; opacity:0; }
+  #hang .ico-start{ display:none; }
+  #hang.idle .ico-end{ display:none; }
+  #hang.idle .ico-start{ display:block; }
+  body[data-state="dialing"] .state-pill .dot{ background:var(--gold); box-shadow:0 0 12px rgba(240,201,104,.8); animation-duration:.9s; }
+
+  /* ---------- 右上角入口 ---------- */
+  #cfgBtnsTop{ position:fixed; top:14px; right:14px; display:flex; gap:8px; }
+  #cfgBtnsTop button{ padding:9px 16px; border-radius:999px; border:1px solid var(--glass-bd); cursor:pointer;
+    font-size:12.5px; letter-spacing:3px; text-indent:3px; font-weight:600; color:var(--gold-hi);
+    background:linear-gradient(180deg, rgba(58,43,18,.85), rgba(32,23,10,.85));
+    box-shadow:0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,235,180,.12);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:transform .15s, box-shadow .2s, border-color .2s; }
+  #cfgBtnsTop button:hover{ border-color:rgba(240,201,104,.5); box-shadow:0 6px 20px rgba(0,0,0,.4), 0 0 16px rgba(240,201,104,.15); }
+  #cfgBtnsTop button:active{ transform:scale(.94); }
+
+  /* ---------- 配置面板 ---------- */
+  .cfgPanel{ position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    background:rgba(10,6,2,.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    animation:fadein .22s ease-out; }
+  @keyframes fadein{ from{ opacity:0; } to{ opacity:1; } }
+  .cfgCard{ width:min(92vw,470px); max-height:86vh; overflow:auto; padding:24px 24px 20px; color:var(--txt);
+    background:linear-gradient(170deg, rgba(38,28,13,.96), rgba(22,16,7,.96));
+    border:1px solid rgba(240,201,104,.22); border-radius:22px;
+    box-shadow:0 24px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,235,180,.1);
+    animation:cardup .28s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes cardup{ from{ opacity:0; transform:translateY(22px) scale(.97);} to{ opacity:1; transform:none;} }
+  .cfgCard::-webkit-scrollbar{ width:5px; } .cfgCard::-webkit-scrollbar-thumb{ background:rgba(240,201,104,.25); border-radius:3px; }
+  .cfgCard h3{ color:var(--gold-hi); letter-spacing:6px; text-indent:6px; margin:0 0 4px; text-align:center; font-size:17px; }
+  .cfgCard .h3-sub{ text-align:center; font-size:11px; color:var(--faint); letter-spacing:2px; margin-bottom:14px; }
+  .cfgCard label{ display:block; margin:14px 0 6px; font-size:11.5px; color:#bfae8a; letter-spacing:1.5px; }
+  .cfgCard select, .cfgCard input, .cfgCard textarea{ width:100%; box-sizing:border-box; padding:11px 13px; border-radius:12px;
+    border:1px solid rgba(240,201,104,.18); background:rgba(20,14,6,.8); color:var(--txt); font-size:14px; outline:none;
+    transition:border-color .2s, box-shadow .2s; }
+  .cfgCard select:focus, .cfgCard input:focus, .cfgCard textarea:focus{
+    border-color:rgba(240,201,104,.55); box-shadow:0 0 0 3px rgba(240,201,104,.1); }
+  .cfgCard textarea{ resize:vertical; font-family:inherit; min-height:88px; line-height:1.6; }
+  #cfgInfo, #voiceInfo{ margin-top:12px; font-size:11px; color:var(--faint); line-height:1.7; word-break:break-all; }
+  #cfgProfiles{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
+  .prof-item{ padding:7px 13px; border-radius:999px; border:1px solid rgba(240,201,104,.22); background:rgba(34,25,11,.8);
+    color:#d5c7a2; cursor:pointer; font-size:12px; transition:all .18s; }
+  .prof-item:hover{ border-color:rgba(240,201,104,.6); color:var(--gold-hi); transform:translateY(-1px); }
+  .prof-item.on{ background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink); font-weight:700; border-color:transparent;
+    box-shadow:0 4px 14px rgba(195,156,64,.35); }
+  #cfgTestResult{ margin-top:10px; font-size:11.5px; line-height:1.7; word-break:break-all; white-space:pre-wrap;
+    color:#c9bd9c; background:rgba(20,14,6,.5); border:1px dashed rgba(240,201,104,.18); border-radius:12px; padding:9px 12px; }
+  #cfgTestResult:empty{ display:none; }
+  .cfgBtns{ display:flex; gap:10px; margin-top:16px; }
+  .cfgBtns button{ flex:1; padding:12px; border-radius:12px; border:none; cursor:pointer; font-size:14px; letter-spacing:3px; text-indent:3px;
+    transition:transform .15s, box-shadow .2s, filter .2s; }
+  .cfgBtns button:hover{ filter:brightness(1.08); }
+  .cfgBtns button:active{ transform:scale(.96); }
+  .btn-gold{ background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink); font-weight:700;
+    box-shadow:0 6px 18px rgba(195,156,64,.3), inset 0 1px 0 rgba(255,255,255,.5); }
+  .btn-dim{ background:rgba(48,38,20,.7); color:#bfae8a; border:1px solid rgba(240,201,104,.14) !important; }
+  #cfgPTest{ width:100%; margin-top:12px; padding:11px; border-radius:12px; border:1px solid rgba(240,201,104,.25);
+    background:rgba(52,40,18,.8); color:var(--gold-hi); cursor:pointer; letter-spacing:4px; text-indent:4px;
+    font-size:13px; font-weight:600; transition:all .2s; }
+  #cfgPTest:hover:not(:disabled){ border-color:rgba(240,201,104,.6); background:rgba(70,54,24,.9); }
+  #cfgPTest:disabled{ opacity:.55; cursor:wait; }
+  /* 背景设置面板 */
+  #bgModes{ display:flex; flex-wrap:wrap; gap:7px; }
+  .bg-urlrow{ display:flex; gap:8px; }
+  .bg-urlrow input{ flex:1; }
+  #bgUrlApply{ flex:none; padding:0 22px; border:none; border-radius:12px; cursor:pointer; font-size:14px; }
+  #bgUploadBtn{ width:100%; padding:12px; border-radius:12px; border:1px dashed rgba(240,201,104,.35);
+    background:rgba(34,25,11,.6); color:var(--gold-hi); cursor:pointer; font-size:13px; letter-spacing:2px; transition:all .2s; }
+  #bgUploadBtn:hover{ border-color:rgba(240,201,104,.7); background:rgba(52,40,18,.8); }
+  .bg-tip{ font-size:11px; color:var(--faint); margin-top:8px; line-height:1.6; }
+  /* Wallpaper 壁纸挑选网格：缩略图铺满卡片，选中亮金描边 */
+  #weGrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr));
+    gap:8px; max-height:300px; overflow-y:auto; padding:2px; margin-top:8px; }
+  .we-item{ position:relative; border:2px solid transparent; border-radius:12px; padding:0;
+    background:none; cursor:pointer; overflow:hidden; aspect-ratio:1/1; transition:border-color .15s, transform .15s; }
+  .we-item img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .we-item .we-t{ position:absolute; left:0; right:0; bottom:0; padding:10px 6px 4px; font-size:10px; line-height:1.3;
+    color:#fff; text-align:center; background:linear-gradient(transparent, rgba(0,0,0,.78));
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .we-item:hover{ transform:scale(1.03); }
+  .we-item.on{ border-color:var(--gold); box-shadow:0 0 12px rgba(240,201,104,.45); }
+  .we-item.noprev{ display:flex; align-items:center; justify-content:center;
+    background:rgba(34,25,11,.6); color:var(--faint); font-size:10px; padding:6px; text-align:center; }
+  .hidden{ display:none !important; }
+  /* 自由布局：body 上的隐藏开关（双击圆盘/聊天区或面板按钮触发） */
+  body.orb-hidden .orb-wrap{ display:none !important; }
+  body.sub-hidden #sub{ display:none !important; }
+  /* ---------- 桌面大屏：左舞台右对话 双栏布局 ---------- */
+  @media (min-width:920px){
+    main{ display:grid; width:100%; max-width:1560px; margin:0 auto;
+      grid-template-columns: 1fr clamp(340px, 32vw, 440px);
+      grid-template-rows: auto 1fr auto auto;
+      grid-template-areas: "top top" "stage chat" "input input" "ctrl ctrl";
+      column-gap: clamp(24px, 3vw, 48px);
+      padding: 0 clamp(24px, 4vw, 56px); }
+    #topbar{ grid-area: top; }
+    #lat{ top:16px; left:22px; right:auto; }   /* 桌面下放左上角，避让右侧对话面板 */
+    #stage{ grid-area: stage; }
+    #disc, .ring, #pet{ width:min(34vw, 348px); }
+    .orbit{ width:min(44vw, 452px); }
+    #ctrl{ grid-area: ctrl; gap:56px; padding-bottom:max(26px, env(safe-area-inset-bottom)); }
+    .btn.float-free{ z-index:14; }
+    #textrow{ grid-area: input; padding-bottom:14px; }
+    #sub:not(.float-drag){ grid-area: chat; width:auto; max-height:none; align-self:stretch; min-height:0;
+      margin:6px 0 10px; padding:18px 16px 14px;
+      background:linear-gradient(170deg, rgba(32,23,10,.60), rgba(16,11,4,.60));
+      border:1px solid rgba(240,201,104,.15); border-radius:24px;
+      box-shadow:0 14px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,235,180,.08);
+      backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      -webkit-mask-image:none; mask-image:none; }
+    #sub:not(.float-drag)::before{ content:""; margin-top:auto; }  /* 消息少时沉底，像聊天窗 */
+  }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div id="bgPhotoBg"></div><div id="bgPhoto"></div>
+    <video id="bgVideoBg" muted loop playsinline autoplay></video><video id="bgVideo" muted loop playsinline autoplay></video>
+    <div id="bgScrim"></div>
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+    <div class="vignette"></div><div class="grain"></div>
+  </div>
+
+  <main>
+    <div id="topbar">
+      <div class="state-pill"><span class="dot"></span><div id="state">正在接通…</div></div>
+    </div>
+    <div id="lat"></div>
+    <div id="stage">
+      <div class="orb-wrap">
+        <div class="orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="ring" id="r1" aria-hidden="true"></div><div class="ring" id="r2" aria-hidden="true"></div>
+        <div id="disc"></div>
+      </div>
+      <!-- 桌宠：纯 SVG 小动物（JS 注入手绘画稿），点它开心、拖它挪窝 -->
+      <div id="pet" data-kind="cat" data-mood="idle" aria-hidden="true"></div>
+</svg>
+      </div>
+    </div>
+    <div id="sub"></div>
+    <div id="textrow" class="hidden">
+      <div class="saybox">
+        <input id="sayText" placeholder="不想说出口的字，打给他…" autocomplete="off" enterkeyhint="send">
+        <button id="typedSend" title="发送">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="ctrl">
+      <button class="btn" id="mute" title="静音 / 开麦">
+        <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5"/></svg>
+        <svg class="mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5"/><path d="M3.5 3.5l17 17"/></svg>
+      </button>
+      <button class="btn" id="hang" title="挂断 / 重新接通">
+        <svg class="ico-end" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a1 1 0 0 1 0-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 0 1 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28a11.7 11.7 0 0 0-2.66-1.85c-.33-.16-.56-.51-.56-.9v-3.1A14.1 14.1 0 0 0 12 9z"/></svg>
+        <svg class="ico-start" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+      </button>
+    </div>
+  </main>
+
+  <div id="cfgBtnsTop">
+    <button id="modelBtn" title="模型 / API 配置">模型</button>
+    <button id="voiceBtn" title="音色 / 说话人配置">音色</button>
+    <button id="personaBtn" title="称呼 / 聊天语气 / 聊天风格">人设</button>
+    <button id="bgBtn" title="背景设置">背景</button>
+    <button id="petBtn" title="桌宠 / 圆盘切换，还能让它自己溜达">宠物</button>
+  </div>
+
+  <div id="petPanel" class="cfgPanel hidden">
+    <div class="cfgCard">
+      <h3>桌宠设置</h3>
+      <div class="h3-sub">PET · 圆盘换只小伙伴陪你打电话</div>
+      <label>舞台显示</label>
+      <div id="petModes">
+        <button type="button" class="prof-item" data-mode="orb">金色圆盘</button>
+        <button type="button" class="prof-item" data-mode="pet">桌宠</button>
+      </div>
+      <label>宠物形态</label>
+      <div id="petKinds"></div>
+      <label>安装 Codex 宠物（填写宠物 id 或粘贴 npm 安装命令）</label>
+      <div style="display:flex; gap:8px;">
+        <input id="petInstallId" placeholder="npx codex-pet-installer add kitagawa-marin" autocomplete="off"
+               style="flex:1; padding:10px 13px; border-radius:12px; border:1px solid rgba(240,201,104,.18);
+                      background:rgba(20,14,6,.8); color:var(--txt); font-size:13.5px; outline:none;">
+        <button id="petInstallGo" class="btn-gold" style="padding:10px 16px; border-radius:12px; border:none;
+                cursor:pointer; font-weight:700; letter-spacing:2px;">安 装</button>
+      </div>
+      <div class="cfgBtns" style="margin-top:8px">
+        <button id="petInstallMax" class="btn-dim">🐕 一键装 Max 边牧（官方推荐）</button>
+      </div>
+      <label>动作（选一个立刻表演；溜达开着时它过会儿还会自己出来遛弯）</label>
+      <div id="petMoods"></div>
+      <label>自动溜达</label>
+      <div id="petRoamRow" class="cfgBtns" style="margin-top:2px">
+        <button id="petRoamToggle" class="btn-dim">关闭溜达</button>
+        <button id="petRoamNow" class="btn-dim">现在就溜一圈</button>
+      </div>
+      <div class="bg-tip">直接拖动宠物可以给它挪窝，位置会记住；双击舞台 / 聊天区依旧能隐藏或显示。点击它一下会开心地蹦起来。Codex 宠物的动作对照：待机=待机、出门溜达=奔跑、开心跳跳=跳跃、睡觉=打盹等待；她说话时它会切换到挥手/欢脱帧。</div>
+      <div id="petInfo"></div>
+      <div class="cfgBtns">
+        <button id="petClose" class="btn-dim">关 闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="personaPanel" class="cfgPanel hidden">
+    <div class="cfgCard">
+      <h3>人设定制</h3>
+      <div class="h3-sub">PERSONA · 怎么称呼、用什么腔调聊天</div>
+      <label>怎么称呼你（他的每一句回复都会叫你这个昵称）</label>
+      <input id="psPetName" placeholder="如：小宝 / 老婆大人 / 猪猪" maxlength="20" autocomplete="off">
+      <label>他叫什么（你想让他自称 / 你喊他的名字）</label>
+      <input id="psHisName" placeholder="如：阿杰 / 顾川，留空则不指定" maxlength="20" autocomplete="off">
+      <label>聊天语气（点选一个，或选「自定义」自己写）</label>
+      <div id="psTones"></div>
+      <textarea id="psToneFree" rows="2" class="hidden" placeholder="用一句话描述想要的语气，如：像小猫一样软软的，爱撒娇…"></textarea>
+      <label>聊天风格（点选一个，或选「自定义」自己写）</label>
+      <div id="psStyles"></div>
+      <textarea id="psStyleFree" rows="2" class="hidden" placeholder="用一句话描述想要的风格，如：每天变着花样给我讲睡前小故事…"></textarea>
+      <div id="psInfo"></div>
+      <div class="cfgBtns">
+        <button id="psSave" class="btn-gold">保存人设</button>
+        <button id="psClose" class="btn-dim">关 闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modelPanel" class="cfgPanel hidden">
+    <div class="cfgCard">
+      <h3>模型配置</h3>
+      <div class="h3-sub">MODEL · 大脑接谁由你决定</div>
+      <label>API 配置（保存多个，点选切换使用）</label>
+      <div id="cfgProfiles"></div>
+      <label>配置名称</label>
+      <input id="cfgPName" placeholder="如：本地Ollama / DeepSeek" autocomplete="off">
+      <label>API 接口（OpenAI 兼容端点）</label>
+      <input id="cfgPUrl" placeholder="http://localhost:11434/v1/chat/completions" autocomplete="off">
+      <label>API Key（本地 Ollama 留空；云端填 sk-…）</label>
+      <input id="cfgPKey" type="password" placeholder="sk-..." autocomplete="off">
+      <label>大脑模型（文本模型即可，无需多模态）</label>
+      <input id="cfgPModel" list="cfgModelList" placeholder="qwen2.5:7b-instruct" autocomplete="off">
+      <datalist id="cfgModelList"></datalist>
+      <div class="cfgBtns">
+        <button id="cfgPSave" class="btn-dim">保存配置</button>
+        <button id="cfgPUse" class="btn-gold">设为当前</button>
+        <button id="cfgPDel" class="btn-dim">删除</button>
+      </div>
+      <button id="cfgPTest">测 试 连 接</button>
+      <div id="cfgTestResult"></div>
+      <label>人设提示词（决定她说话的风格，改完保存生效）</label>
+      <textarea id="cfgPrompt" rows="4" placeholder="你是电话里陪用户聊天的伙伴…"></textarea>
+      <div id="cfgInfo"></div>
+      <div class="cfgBtns">
+        <button id="cfgPromptSave" class="btn-gold">保存人设</button>
+        <button id="modelClose" class="btn-dim">关 闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="voicePanel" class="cfgPanel hidden">
+    <div class="cfgCard">
+      <h3>音色配置</h3>
+      <div class="h3-sub">VOICE · 换个声音接电话</div>
+      <label>音色（models/ 下的 VITS 模型）</label>
+      <select id="cfgVoice"></select>
+      <label>说话人编号（多说话人音色如 fanchen-C 有 187 种声音，0 ~ N-1）</label>
+      <input id="cfgSid" type="number" min="0" placeholder="0" autocomplete="off">
+      <div id="voiceInfo"></div>
+      <div class="cfgBtns">
+        <button id="voiceSave" class="btn-gold">保 存</button>
+        <button id="voiceClose" class="btn-dim">关 闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bgPanel" class="cfgPanel hidden">
+    <div class="cfgCard">
+      <h3>背景设置</h3>
+      <div class="h3-sub">BACKGROUND · 换个心情打电话</div>
+      <label>背景来源</label>
+      <div id="bgModes">
+        <button type="button" class="prof-item on" data-mode="builtin">内置金色</button>
+        <button type="button" class="prof-item" data-mode="wallpaper">Wallpaper 壁纸</button>
+        <button type="button" class="prof-item" data-mode="upload">本地上传</button>
+        <button type="button" class="prof-item" data-mode="url">图片 URL</button>
+      </div>
+      <div id="bgWeRow" class="hidden">
+        <label>选择 Wallpaper 壁纸（不改电脑上的 Wallpaper Engine）</label>
+        <div id="weGrid"></div>
+        <div class="bg-tip">缩略图是各壁纸工程的官方预览图；动态壁纸在通话页里以静态画面呈现。列表来自本机已安装的 Wallpaper Engine。</div>
+      </div>
+      <div id="bgUrlRow" class="hidden">
+        <label>图片 URL</label>
+        <div class="bg-urlrow">
+          <input id="bgUrl" placeholder="https://…/wallpaper.jpg" autocomplete="off">
+          <button id="bgUrlApply" type="button" class="btn-gold">应用</button>
+        </div>
+        <div class="bg-tip">直链图片最稳（.jpg/.png 结尾）；个别站点有防盗链会拒绝外链。</div>
+      </div>
+      <div id="bgUploadRow" class="hidden">
+        <label>本地图片</label>
+        <button id="bgUploadBtn" type="button">选择图片…</button>
+        <input id="bgUpload" type="file" accept="image/*" class="hidden">
+        <div class="bg-tip">图片只存在浏览器本地（IndexedDB），不会上传到任何服务器。</div>
+      </div>
+      <div id="bgInfo"></div>
+      <label>界面布局（金色圆盘 / 聊天记录 / 开麦·挂断按键 / 打字条均可拖动移位，双击圆盘或聊天区也能显示或隐藏）</label>
+      <div class="cfgBtns" style="margin-top:2px">
+        <button id="layOrbToggle" class="btn-dim">圆盘 显示/隐藏</button>
+        <button id="laySubToggle" class="btn-dim">聊天 显示/隐藏</button>
+        <button id="layReset" class="btn-dim">恢复默认布局</button>
+      </div>
+      <div class="cfgBtns">
+        <button id="bgClose" class="btn-dim">关 闭</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+import { VoiceCall } from './voice-call.js';
+import { PetController } from './pet-controller.js';
+
+const $ = id => document.getElementById(id);
+const STATE_TXT = { idle:'待机', listening:'正在聆听', thinking:'正在传达', speaking:'正在传达' };
+// 无登录页：ws 地址自动按当前页面推导（本机/局域网都正确），令牌由服务端注入
+const tokRaw = '__PAIVOICE_TOKEN__';
+const tok = (tokRaw.startsWith('__') && tokRaw.endsWith('__')) ? '' : tokRaw;
+const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+const url = proto + location.host + '/voice/ws' + (tok ? '?token=' + encodeURIComponent(tok) : '');
+let call = null, muted = false;
+
+function rings(level, base){
+  const d = document.getElementById('disc');
+  const s = 1 + Math.min(0.14, (level || 0) * (base || 1));
+  d.style.transform = `scale(${s})`;
+}
+function addSub(cls, text){
+  const div = document.createElement('div');
+  div.className = cls; div.textContent = text;
+  const box = $('sub'); box.appendChild(div);
+  while (box.children.length > 60) box.removeChild(box.firstChild);  // 追加后裁剪
+  box.scrollTop = box.scrollHeight;
+}
+function renderReply(text){
+  // K 的输出协议：引号内英文（会被朗读）+ 引号外中文翻译（只给字幕）
+  // 追加模式：保留历史字幕（闻序审查 P1）；裁剪在追加后执行，真正不超 60 行
+  for (const raw of String(text).split(/\n+/)) {
+    const line = raw.trim(); if (!line) continue;
+    const en = line.match(/"([^"]*)"/);
+    if (en && en[1].trim()) addSub('line-en', '她：' + en[1]);
+    const zh = line.replace(/"[^"]*"/g, '').trim();
+    if (zh) addSub('line-her', '她：' + zh);
+    if (!en && !zh) addSub('line-her', '她：' + line);
+  }
+}
+
+function setInCall(active){
+  $('hang').classList.toggle('idle', !active);   // 绿色待拨态 / 红色通话态
+  if (!active) $('textrow').classList.add('hidden');
+}
+
+// ---- 自由布局：金色圆盘 / 聊天记录 / 开麦·挂断按键 / 打字条都可拖动移位；圆盘与聊天双击显示/隐藏；位置记在 localStorage ----
+const ORB_KEY = 'paivoice_orb_pos', SUB_KEY = 'paivoice_sub_pos',
+      MUTE_KEY = 'paivoice_mute_pos', HANG_KEY = 'paivoice_hang_pos',
+      TEXT_KEY = 'paivoice_text_pos';
+const layGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null') || {}; } catch (e) { return {}; } };
+const layEl = k => k === ORB_KEY ? document.querySelector('.orb-wrap')
+  : k === SUB_KEY ? $('sub') : k === MUTE_KEY ? $('mute')
+  : k === HANG_KEY ? $('hang') : $('textrow');
+
+// 把元素摆到固定坐标（cx=true 表示 x/y 是中心点；w 恢复拖离时记录的宽度，避免跳动）
+function placeFloat(el, x, y, cx, w){
+  if (el.getClientRects().length === 0) return;   // 隐藏元素（如未接通的打字条）：不动它，亮出时再落位
+  if (el.id === 'sub') el.classList.add('float-drag');
+  if (el.classList.contains('orb-wrap') || el.classList.contains('btn') || el.id === 'textrow') el.classList.add('float-free');
+  if (w) el.style.width = w + 'px';
+  if (cx) { x -= el.offsetWidth / 2; y -= el.offsetHeight / 2; }
+  x = Math.max(4, Math.min(x, innerWidth - el.offsetWidth - 4));
+  y = Math.max(4, Math.min(y, innerHeight - el.offsetHeight - 4));
+  el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.right = 'auto'; el.style.bottom = 'auto';
+}
+function layApply(key){   // 按存档恢复：有位置则浮起，没有则留在默认布局位
+  const el = layEl(key), s = layGet(key);
+  document.body.classList.toggle(key === ORB_KEY ? 'orb-hidden' : 'sub-hidden', !!s.hidden);
+  if (s.hidden || s.x === undefined) return;
+  placeFloat(el, s.x, s.y, s.cx, s.w);
+}
+function makeDraggable(el, key, opts = {}){
+  let sx = 0, sy = 0, ox = 0, oy = 0, down = false, moved = false, killClick = false;
+  el.addEventListener('click', e => {   // 真实拖完松手浏览器仍会派发一次 click：在这里吞掉，按键才不会拖完误触挂断/静音
+    if (!killClick) return;
+    killClick = false;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (!opts.fromInput && e.target.closest('input, textarea')) return;   // 输入控件正常用（打字条传 fromInput：点住输入框也能拖）
+    down = true; moved = false; killClick = false;
+    sx = e.clientX; sy = e.clientY;
+    const r = el.getBoundingClientRect(); ox = r.left; oy = r.top;
+  });
+  el.addEventListener('pointermove', e => {
+    if (!down) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved) {
+      if (Math.hypot(dx, dy) < 5) return;    // 消除抖动误判，点了不拖不算
+      moved = true;
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      el.classList.add('dragging');
+      placeFloat(el, ox, oy);                // 从默认布局位拖出的瞬间浮起
+    }
+    el.style.left = (ox + dx) + 'px'; el.style.top = (oy + dy) + 'px';
+  });
+  el.addEventListener('pointerup', e => {
+    if (!down) return; down = false;
+    el.classList.remove('dragging');
+    if (!moved) return;
+    killClick = true;                        // 拖过的松手不算点击（真正的拦截在上方 click 捕获层）
+    e.preventDefault();
+    if (el.id === 'textrow' && el.contains(document.activeElement)) document.activeElement.blur();   // 拖完收起软键盘
+    const r = el.getBoundingClientRect();
+    const s = el.classList.contains('orb-wrap')
+      ? { x: r.left + r.width / 2, y: r.top + r.height / 2, cx: true }   // 圆盘存中心点，窗口缩放也稳
+      : { x: r.left, y: r.top, w: r.width };
+    placeFloat(el, s.x, s.y, s.cx, s.w);   // 松手夹回屏幕内（鼠标也夹，防拖出界丢在屏幕外）
+    const r2 = el.getBoundingClientRect(); // 用夹回后的最终位置存档
+    if (el.classList.contains('orb-wrap')) { s.x = r2.left + r2.width / 2; s.y = r2.top + r2.height / 2; }
+    else { s.x = r2.left; s.y = r2.top; }
+    localStorage.setItem(key, JSON.stringify(s));
+  });
+  el.addEventListener('pointercancel', () => { down = false; el.classList.remove('dragging'); });
+  if (!el.classList.contains('btn') && el.id !== 'textrow') {   // 圆盘/聊天：双击空白处显示/隐藏（位置存档保留；按键与打字条不参与，避免误触）
+    el.addEventListener('dblclick', e => {
+      if (e.target.closest('input, textarea, button')) return;
+      const s = layGet(key); s.hidden = !s.hidden;
+      localStorage.setItem(key, JSON.stringify(s));
+      document.body.classList.toggle(key === ORB_KEY ? 'orb-hidden' : 'sub-hidden', s.hidden);
+    });
+  }
+}
+function layToggle(key){   // 面板按钮：显示/隐藏
+  const s = layGet(key);
+  s.hidden = !s.hidden;
+  localStorage.setItem(key, JSON.stringify(s));
+  document.body.classList.toggle(key === ORB_KEY ? 'orb-hidden' : 'sub-hidden', s.hidden);
+  if (!s.hidden) layApply(key);
+}
+function layReset(){       // 恢复默认布局：清存档、回原位、重新显示
+  for (const k of [ORB_KEY, SUB_KEY, MUTE_KEY, HANG_KEY, TEXT_KEY]) localStorage.removeItem(k);
+  document.body.classList.remove('orb-hidden', 'sub-hidden');
+  const w = layEl(ORB_KEY);
+  w.style.cssText = ''; w.classList.remove('float-free', 'dragging');
+  const s = layEl(SUB_KEY);
+  s.style.cssText = ''; s.classList.remove('float-drag', 'dragging');
+  for (const id of ['mute', 'hang', 'textrow']) {
+    const b = $(id);
+    b.style.cssText = ''; b.classList.remove('float-free', 'dragging');
+  }
+}
+
+let callEpoch = 0;   // 代际号：旧通话实例的回调不得干扰新一轮通话
+
+  /* ---------- JS 宠物动画脚本：形态画稿 + 表演/溜达/拖拽 ---------- */
+const PET_KEY = 'paivoice_pet';
+/* 宠物画稿：每形态独立 SVG（icon 式只换色那种不要），按 200x200 画布手绘，
+   左右对称部件用 class 挂钩动画（p-ear/p-arm/p-leg/p-wing/p-tail），改色走 --pc/--pc2/--pc3 */
+const PET_DRAWINGS = {
+  cat: `
+    <g class="p-tail p-part"><path d="M138 150 C 170 152, 184 128, 178 100 C 178 118, 166 140, 134 138 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M172 106 C 176 114, 174 124, 168 130" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round"/></g>
+    <g class="p-ear-l p-part"><path d="M60 74 L 50 32 L 88 56 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M62 64 L 57 42 L 78 55 Z" fill="var(--pk)"/></g>
+    <g class="p-ear-r p-part"><path d="M140 74 L 150 32 L 112 56 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M138 64 L 143 42 L 122 55 Z" fill="var(--pk)"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="55" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="145" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="79" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M73 159 v4 M79 160 v4 M85 159 v4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="121" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M115 159 v4 M121 160 v4 M127 159 v4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="115" rx="57" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <path d="M64 148 C 76 160, 124 160, 136 148" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".5"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="46" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path d="M50 96 Q 46 112 56 118 M150 96 Q 154 112 144 118" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".55"/>
+        <ellipse cx="66" cy="106" rx="8.5" ry="5.5" fill="var(--pk)"/>
+        <ellipse cx="134" cy="106" rx="8.5" ry="5.5" fill="var(--pk)"/>
+        <path class="p-eye-g" d="M72 82 Q 80 74 88 82 Q 80 88 72 82 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="80" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="83" cy="79" r="2.8" fill="#fff"/><circle cx="77.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye"><ellipse cx="120" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="123" cy="79" r="2.8" fill="#fff"/><circle cx="117.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye-happy"><path d="M72 84 Q 80 74 88 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M112 84 Q 120 74 128 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/></g>
+        <path class="p-mouth" d="M100 97 L 100 102 M100 102 Q 94 108 89 103 M100 102 Q 106 108 111 103" stroke="#4a3222" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M92 102 Q 100 100 108 102 Q 106 114 100 114 Q 94 114 92 102 Z" fill="#a4523f"/>
+        <path d="M97 94 L 103 94 L 100 98 Z" fill="#d97a68"/>
+        <path d="M100 40 C 96 32, 105 30, 101 22" stroke="var(--pl)" stroke-width="3" stroke-linecap="round" fill="none"/>
+      </g>
+    </g>`,
+  shiba: `
+    <g class="p-tail p-part"><path d="M136 142 C 168 140, 186 118, 176 92 C 184 116, 176 146, 136 152 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M168 104 C 176 112, 178 128, 170 138" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".6"/></g>
+    <g class="p-ear-l p-part"><path d="M58 70 L 52 30 L 90 52 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M62 62 L 59 42 L 79 52 Z" fill="var(--pk)"/></g>
+    <g class="p-ear-r p-part"><path d="M142 70 L 148 30 L 110 52 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M138 62 L 141 42 L 121 52 Z" fill="var(--pk)"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="54" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="146" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="78" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M72 159 v4 M78 160 v4 M84 159 v4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="122" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M116 159 v4 M122 160 v4 M128 159 v4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="115" rx="57" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <path d="M60 128 C 74 146, 126 146, 140 128 L 136 150 C 120 162, 80 162, 64 150 Z" fill="var(--pc2)" opacity=".55" stroke="none"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="46" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path d="M48 92 Q 44 110 54 116 M152 92 Q 156 110 146 116" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".55"/>
+        <path d="M100 46 C 82 58, 70 76, 72 92 L 100 92 Z" fill="var(--pc2)" opacity=".45"/>
+        <path d="M100 46 C 118 58, 130 76, 128 92 L 100 92 Z" fill="var(--pc2)" opacity=".45"/>
+        <ellipse cx="100" cy="92" rx="26" ry="20" fill="#fbf3e4"/>
+        <path class="p-eye-g" d="M72 80 Q 80 72 88 80 Q 80 86 72 80 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="80" cy="80" rx="7.5" ry="8.5" fill="#33261a"/>
+          <circle cx="83" cy="77" r="2.6" fill="#fff"/><circle cx="77.5" cy="83" r="1.3" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye"><ellipse cx="120" cy="80" rx="7.5" ry="8.5" fill="#33261a"/>
+          <circle cx="123" cy="77" r="2.6" fill="#fff"/><circle cx="117.5" cy="83" r="1.3" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye-happy"><path d="M72 82 Q 80 72 88 82" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M112 82 Q 120 72 128 82" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/></g>
+        <path d="M96 88 L 104 88 L 100 94 Z" fill="#3b2c1e"/>
+        <path class="p-mouth" d="M100 94 L 100 98 M100 98 Q 94 104 89 99 M100 98 Q 106 104 111 99" stroke="#4a3222" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M90 98 Q 100 96 110 98 Q 108 112 100 112 Q 92 112 90 98 Z" fill="#a4523f"/>
+        <path d="M108 100 Q 116 102 114 108" stroke="#4a3222" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      </g>
+    </g>`,
+  bunny: `
+    <g class="p-tail p-part"><circle cx="144" cy="146" r="13" fill="#fdf8f2" stroke="var(--pl)" stroke-width="3"/></g>
+    <g class="p-ear-l p-part"><path d="M70 56 C 58 20, 70 4, 82 8 C 94 12, 92 44, 88 62 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M76 52 C 70 30, 74 18, 81 18 C 88 20, 86 40, 84 52 Z" fill="var(--pk)"/></g>
+    <g class="p-ear-r p-part"><path d="M130 56 C 142 20, 130 4, 118 8 C 106 12, 108 44, 112 62 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M124 52 C 130 30, 126 18, 119 18 C 112 20, 114 40, 116 52 Z" fill="var(--pk)"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="54" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="146" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="78" cy="159" rx="15" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M72 161 v3.5 M78 162 v3.5 M84 161 v3.5" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="122" cy="159" rx="15" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M116 161 v3.5 M122 162 v3.5 M128 161 v3.5" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="115" rx="57" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <ellipse cx="100" cy="128" rx="32" ry="26" fill="#fdf8f2" opacity=".75"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="46" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <ellipse cx="66" cy="106" rx="9" ry="5.5" fill="var(--pk)"/>
+        <ellipse cx="134" cy="106" rx="9" ry="5.5" fill="var(--pk)"/>
+        <path class="p-eye-g" d="M72 82 Q 80 74 88 82 Q 80 88 72 82 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="80" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="83" cy="79" r="2.8" fill="#fff"/><circle cx="77.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye"><ellipse cx="120" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="123" cy="79" r="2.8" fill="#fff"/><circle cx="117.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye-happy"><path d="M72 84 Q 80 74 88 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M112 84 Q 120 74 128 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/></g>
+        <path d="M96 96 L 104 96 L 100 101 Z" fill="#d97a80"/>
+        <path class="p-mouth" d="M100 101 L 100 104 M100 104 Q 94 110 88 106 M100 104 Q 106 110 112 106" stroke="#4a3222" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M93 104 Q 100 102 107 104 Q 105 114 100 114 Q 95 114 93 104 Z" fill="#b4574e"/>
+        <path d="M100 42 C 96 34, 104 32, 100 24" stroke="var(--pl)" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/>
+      </g>
+    </g>`,
+  panda: `
+    <g class="p-tail p-part"><circle cx="146" cy="148" r="10" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/></g>
+    <g class="p-ear-l p-part"><circle cx="60" cy="42" r="17" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/></g>
+    <g class="p-ear-r p-part"><circle cx="140" cy="42" r="17" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="52" cy="124" rx="13" ry="10" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="148" cy="124" rx="13" ry="10" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="79" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M73 159 v4 M79 160 v4 M85 159 v4" stroke="#e8e4dc" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="121" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M115 159 v4 M121 160 v4 M127 159 v4" stroke="#e8e4dc" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="115" rx="58" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <path d="M62 146 C 78 160, 122 160, 138 146" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".4"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="47" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <ellipse cx="78" cy="84" rx="15" ry="18" fill="var(--pc2)" transform="rotate(-16 78 84)"/>
+        <ellipse cx="122" cy="84" rx="15" ry="18" fill="var(--pc2)" transform="rotate(16 122 84)"/>
+        <g class="p-eye"><circle cx="79" cy="84" r="5" fill="#fff"/><circle cx="79" cy="84" r="2.8" fill="#1c1815"/></g>
+        <g class="p-eye"><circle cx="121" cy="84" r="5" fill="#fff"/><circle cx="121" cy="84" r="2.8" fill="#1c1815"/></g>
+        <g class="p-eye-happy"><path d="M71 85 Q 79 77 87 85" stroke="#f5f2ec" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <path d="M113 85 Q 121 77 129 85" stroke="#f5f2ec" stroke-width="4" stroke-linecap="round" fill="none"/></g>
+        <path d="M96 98 L 104 98 L 100 103 Z" fill="#3b3129"/>
+        <path class="p-mouth" d="M100 103 L 100 106 M100 106 Q 94 112 89 107 M100 106 Q 106 112 111 107" stroke="#3b3129" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M93 106 Q 100 104 107 106 Q 105 116 100 116 Q 95 116 93 106 Z" fill="#8f4a44"/>
+      </g>
+    </g>`,
+  bird: `
+    <g class="p-wing-l p-part"><path d="M52 118 C 24 108, 14 128, 22 146 C 34 138, 46 134, 56 134 Z" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M30 128 C 36 126, 42 126, 47 128 M28 136 C 34 134, 40 134, 45 136" stroke="var(--pl)" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/></g>
+    <g class="p-wing-r p-part"><path d="M148 118 C 176 108, 186 128, 178 146 C 166 138, 154 134, 144 134 Z" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M170 128 C 164 126, 158 126, 153 128 M172 136 C 166 134, 160 134, 155 136" stroke="var(--pl)" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="44" ry="9" fill="rgba(0,0,0,.30)"/>
+      <ellipse cx="100" cy="118" rx="54" ry="50" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <path d="M64 142 C 80 156, 120 156, 136 142" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".5"/>
+      <path d="M82 130 Q 100 122 118 130" stroke="var(--pl)" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".4"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="76" rx="46" ry="42" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path d="M100 34 C 94 24, 106 22, 100 12" stroke="var(--pl)" stroke-width="3" stroke-linecap="round" fill="none"/>
+        <path d="M96 30 L 106 30 L 101 22 Z" fill="#e8874f"/>
+        <path class="p-eye-g" d="M74 74 Q 82 66 90 74 Q 82 80 74 74 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="82" cy="74" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="85" cy="71" r="2.8" fill="#fff"/><circle cx="79.5" cy="77" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye"><ellipse cx="118" cy="74" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="121" cy="71" r="2.8" fill="#fff"/><circle cx="115.5" cy="77" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye-happy"><path d="M74 76 Q 82 66 90 76" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M110 76 Q 118 66 126 76" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/></g>
+        <path d="M92 86 L 108 86 L 100 98 Z" fill="#e8874f" stroke="var(--pl)" stroke-width="2.4" stroke-linejoin="round"/>
+        <path class="p-mouth-open" d="M92 86 L 108 86 L 100 98 Z" fill="#c96034"/>
+        <ellipse cx="66" cy="90" rx="7.5" ry="5" fill="rgba(240,140,120,.45)"/>
+        <ellipse cx="134" cy="90" rx="7.5" ry="5" fill="rgba(240,140,120,.45)"/>
+      </g>
+      <g class="p-leg-l p-part"><path d="M88 163 l -5 5 M88 163 l 0 6 M88 163 l 5 5" stroke="#d98a3e" stroke-width="3" stroke-linecap="round" fill="none"/>
+        <path d="M84 170 h 9" stroke="#d98a3e" stroke-width="3" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><path d="M112 163 l -5 5 M112 163 l 0 6 M112 163 l 5 5" stroke="#d98a3e" stroke-width="3" stroke-linecap="round" fill="none"/>
+        <path d="M108 170 h 9" stroke="#d98a3e" stroke-width="3" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="128" rx="26" ry="24" fill="#fdf3d3" opacity=".7"/>
+    </g>`,
+  frog: `
+    <g class="p-leg-l p-part"><path d="M72 152 C 60 156, 52 162, 50 168 C 60 168, 70 166, 78 162 Z" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="54" cy="167" r="3.2" fill="var(--pc)" stroke="var(--pl)" stroke-width="1.5"/></g>
+    <g class="p-leg-r p-part"><path d="M128 152 C 140 156, 148 162, 150 168 C 140 168, 130 166, 122 162 Z" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="146" cy="167" r="3.2" fill="var(--pc)" stroke="var(--pl)" stroke-width="1.5"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="49" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="112" rx="62" ry="54" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path d="M46 100 Q 40 118 52 126 M154 100 Q 160 118 148 126" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".45"/>
+        <circle class="p-eye" cx="70" cy="66" r="15" fill="var(--pc)" stroke="var(--pl)" stroke-width="3"/>
+        <circle class="p-eye" cx="130" cy="66" r="15" fill="var(--pc)" stroke="var(--pl)" stroke-width="3"/>
+        <g class="p-eye"><circle cx="70" cy="64" r="5.5" fill="#25301e"/>
+          <circle cx="72" cy="62" r="1.8" fill="#fff"/></g>
+        <g class="p-eye"><circle cx="130" cy="64" r="5.5" fill="#25301e"/>
+          <circle cx="132" cy="62" r="1.8" fill="#fff"/></g>
+        <g class="p-eye-happy"><path d="M62 66 Q 70 58 78 66" stroke="#25301e" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <path d="M122 66 Q 130 58 138 66" stroke="#25301e" stroke-width="4" stroke-linecap="round" fill="none"/></g>
+        <ellipse cx="58" cy="98" rx="8" ry="5" fill="rgba(120,180,90,.5)"/>
+        <ellipse cx="142" cy="98" rx="8" ry="5" fill="rgba(120,180,90,.5)"/>
+        <path class="p-mouth" d="M74 118 Q 100 132 126 118" stroke="#33502a" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M76 116 Q 100 128 124 116 Q 118 142 100 142 Q 82 142 76 116 Z" fill="#8f4a44"/>
+        <ellipse class="p-sac" cx="100" cy="140" rx="24" ry="10" fill="rgba(255,244,210,.55)"/>
+        <path d="M88 66 Q 100 56 112 66" stroke="var(--pl)" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".4"/>
+      </g>
+      <ellipse class="p-arm-l p-part" cx="46" cy="128" rx="11" ry="8.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="154" cy="128" rx="11" ry="8.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+    </g>`,
+  pig: `
+    <g class="p-tail p-part"><path d="M142 138 C 162 134, 170 120, 162 108 C 168 122, 162 138, 142 146 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M160 116 C 166 114, 168 120, 163 124" stroke="var(--pl)" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+    <g class="p-ear-l p-part"><path d="M62 60 L 56 30 L 88 48 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M65 55 L 62 40 L 79 49 Z" fill="var(--pk)"/></g>
+    <g class="p-ear-r p-part"><path d="M138 60 L 144 30 L 112 48 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M135 55 L 138 40 L 121 49 Z" fill="var(--pk)"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="54" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="146" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="79" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M74 157 l -2 4 M79 158 l 0 4 M84 157 l 2 4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="121" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <path d="M116 157 l -2 4 M121 158 l 0 4 M126 157 l 2 4" stroke="var(--pl)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+      <ellipse cx="100" cy="115" rx="58" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="46" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path class="p-eye-g" d="M70 80 Q 78 72 86 80 Q 78 86 70 80 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="78" cy="80" rx="7" ry="8" fill="#33261a"/>
+          <circle cx="80.5" cy="77" r="2.4" fill="#fff"/></g>
+        <g class="p-eye"><ellipse cx="122" cy="80" rx="7" ry="8" fill="#33261a"/>
+          <circle cx="124.5" cy="77" r="2.4" fill="#fff"/></g>
+        <g class="p-eye-happy"><path d="M70 82 Q 78 72 86 82" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M114 82 Q 122 72 130 82" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/></g>
+        <ellipse cx="100" cy="100" rx="19" ry="14" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+        <circle cx="93" cy="100" r="3" fill="var(--pl)" stroke="none" opacity=".8"/>
+        <circle cx="107" cy="100" r="3" fill="var(--pl)" stroke="none" opacity=".8"/>
+        <path class="p-mouth" d="M92 116 Q 100 122 108 116" stroke="#4a3222" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M93 114 Q 100 112 107 114 Q 105 124 100 124 Q 95 124 93 114 Z" fill="#a4523f"/>
+        <ellipse cx="60" cy="98" rx="8.5" ry="5.5" fill="var(--pk)"/>
+        <ellipse cx="140" cy="98" rx="8.5" ry="5.5" fill="var(--pk)"/>
+      </g>
+    </g>`,
+  gold: `
+    <g class="p-tail p-part"><path d="M138 150 C 170 152, 184 128, 178 100 C 178 118, 166 140, 134 138 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/></g>
+    <g class="p-ear-l p-part"><path d="M60 74 L 50 32 L 88 56 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M62 64 L 57 42 L 78 55 Z" fill="var(--pk)"/></g>
+    <g class="p-ear-r p-part"><path d="M140 74 L 150 32 L 112 56 Z" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M138 64 L 143 42 L 122 55 Z" fill="var(--pk)"/></g>
+    <g class="p-all">
+      <ellipse class="p-shadow" cx="100" cy="168" rx="47" ry="9.5" fill="rgba(0,0,0,.30)"/>
+      <ellipse class="p-arm-l p-part" cx="55" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <ellipse class="p-arm-r p-part" cx="145" cy="128" rx="12" ry="9.5" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/>
+      <g class="p-leg-l p-part"><ellipse cx="79" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/></g>
+      <g class="p-leg-r p-part"><ellipse cx="121" cy="159" rx="14" ry="9" fill="var(--pc2)" stroke="var(--pl)" stroke-width="3"/></g>
+      <ellipse cx="100" cy="115" rx="57" ry="53" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+      <ellipse cx="100" cy="128" rx="34" ry="28" fill="rgba(255,250,228,.85)"/>
+      <g class="p-head">
+        <ellipse cx="100" cy="84" rx="52" ry="46" fill="var(--pc)" stroke="var(--pl)" stroke-width="3.5"/>
+        <path d="M50 96 Q 46 112 56 118 M150 96 Q 154 112 144 118" stroke="var(--pl)" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".55"/>
+        <ellipse cx="66" cy="106" rx="8.5" ry="5.5" fill="var(--pk)"/>
+        <ellipse cx="134" cy="106" rx="8.5" ry="5.5" fill="var(--pk)"/>
+        <path class="p-eye-g" d="M72 82 Q 80 74 88 82 Q 80 88 72 82 Z" fill="var(--pc)" opacity="0"/>
+        <g class="p-eye"><ellipse cx="80" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="83" cy="79" r="2.8" fill="#fff"/><circle cx="77.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <g class="p-eye"><ellipse cx="120" cy="82" rx="8" ry="9" fill="#33261a"/>
+          <circle cx="123" cy="79" r="2.8" fill="#fff"/><circle cx="117.5" cy="85" r="1.4" fill="#fff" opacity=".7"/></g>
+        <path class="p-eye-happy" d="M72 84 Q 80 74 88 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+        <path class="p-eye-happy" d="M112 84 Q 120 74 128 84" stroke="#33261a" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth" d="M100 97 L 100 102 M100 102 Q 94 108 89 103 M100 102 Q 106 108 111 103" stroke="#4a3222" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+        <path class="p-mouth-open" d="M92 102 Q 100 100 108 102 Q 106 114 100 114 Q 94 114 92 102 Z" fill="#a4523f"/>
+        <path d="M97 94 L 103 94 L 100 98 Z" fill="#d97a68"/>
+        <path d="M100 40 C 96 32, 105 30, 101 22" stroke="var(--pl)" stroke-width="3" stroke-linecap="round" fill="none"/>
+      </g>
+    </g>`,
+};
+const PET_KINDS = [
+  { id:'cat',   name:'🐱 猫猫', pc:'#f0c968', pc2:'#e8b568', pk:'rgba(224,138,128,.55)', pl:'rgba(90,62,12,.45)' },
+  { id:'shiba', name:'🐕 柴犬', pc:'#e0a860', pc2:'#f4e3c2', pk:'rgba(120,72,20,.35)',  pl:'rgba(90,62,12,.5)' },
+  { id:'bunny', name:'🐰 兔兔', pc:'#f2e8e0', pc2:'#e8d5c8', pk:'rgba(235,160,175,.5)', pl:'rgba(120,88,66,.45)' },
+  { id:'panda', name:'🐼 熊猫', pc:'#f5f2ec', pc2:'#3a3632', pk:'rgba(224,128,128,.28)', pl:'rgba(40,36,30,.5)' },
+  { id:'bird',  name:'🐤 小鸡', pc:'#f6d76b', pc2:'#eec24e', pk:'rgba(240,140,120,.4)', pl:'rgba(120,86,20,.45)' },
+  { id:'frog',  name:'🐸 青蛙', pc:'#9ed88a', pc2:'#7fbe6c', pk:'rgba(120,180,90,.5)',  pl:'rgba(40,74,32,.5)' },
+  { id:'pig',   name:'🐷 猪猪', pc:'#f2b8c0', pc2:'#e59faa', pk:'rgba(224,128,150,.5)', pl:'rgba(120,60,80,.4)' },
+  { id:'gold',  name:'🥇 金盘', pc:'#f0c968', pc2:'#caa64a', pk:'rgba(224,138,128,.55)', pl:'rgba(90,62,12,.45)' },
+];
+/* Codex 精灵图宠物（codex-pet.org）：安装后服务端 /v1/pets 列表驱动。
+   kind id 约定 "codex:<slug>"，渲染走精灵图逐帧播放，不走 SVG 画稿。 */
+const petSprites = [];          // [{ slug, name, displayName, creator, description }]
+let petSpriteURLs = {};         // slug -> spritesheet.webp URL（安装列表刷新时重建）
+function petKindIsSprite(id){ return typeof id === 'string' && id.startsWith('codex:'); }
+function petSpriteDef(){        // 当前选中的精灵宠物（未命中返回 null）
+  if (!petKindIsSprite(petState.kind)) return null;
+  return petSprites.find(p => petState.kind === 'codex:' + p.slug) || null;
+}
+const PET_MOODS = [
+  { id:'happy', name:'🎉 开心跳跳' },
+  { id:'walk',  name:'🚶 出门溜达' },
+  { id:'sleep', name:'😴 睡个觉' },
+  { id:'idle',  name:'🙂 待机' },
+];
+const petEl = $('pet');
+let petState = { mode:'orb', kind:'cat', roam:false };
+let petMood = 'idle';
+let petRoamTimer = null;      // 溜达间隔调度
+let petWalkFrame = null;      // 溜达滑行 rAF
+let petDragged = false;       // 拖过就认拖到的位置为新家
+let petAway = false;          // 宠物是否住在外面（不在舞台）
+let petDrag = null;
+let petIdleActTimer = null;   // 待机小动作
+let petTalkCleanTimer = null;
+
+function petRenderSpriteFrame({ action, row, frame }) {
+  if (!petKindIsSprite(petState.kind)) return;
+  const el = petEl.querySelector('.p-spr');
+  if (!el) return;
+  el.dataset.state = action;
+  el.dataset.row = row;
+  el.dataset.frame = frame;
+  el.style.backgroundPosition = (frame * 100 / 7) + '% ' + (row * 100 / 8) + '%';
+}
+
+const petController = new PetController({ onFrame: petRenderSpriteFrame });
+
+function petSave(){ localStorage.setItem(PET_KEY, JSON.stringify(petState)); }
+function petHome(){ return petState.home && typeof petState.home.x === 'number' ? petState.home : null; }
+function petKindDef(){ return PET_KINDS.find(k => k.id === petState.kind) || PET_KINDS[0]; }
+function petKindBird(){ return petState.kind === 'bird'; }
+
+function petMountDrawing(){   // 形态画稿挂载：整体重建 SVG 内容（精灵图宠物走 p-spr 路径）
+  const k = petKindDef();
+  petEl.dataset.kind = k.id;
+  const spr = petSpriteDef();
+  petEl.classList.toggle('sprite-pet', !!spr);
+  if (spr) {
+    petEl.style.removeProperty('--pc'); petEl.style.removeProperty('--pc2');
+    petEl.style.removeProperty('--pk'); petEl.style.removeProperty('--pl');
+    petEl.innerHTML = '<div class="p-spr" data-state="idle"></div>';
+    petSprApply(true);
+    petController.refresh();
+    return;
+  }
+  petEl.style.setProperty('--pc', k.pc);
+  petEl.style.setProperty('--pc2', k.pc2);
+  petEl.style.setProperty('--pk', k.pk);
+  petEl.style.setProperty('--pl', k.pl);
+  petEl.innerHTML =
+    '<svg class="p-svg" viewBox="0 0 200 200" fill="none" aria-hidden="true">' + PET_DRAWINGS[k.id] + '</svg>';
+}
+
+/* 精灵图宠物只负责加载图集；动作选择和逐帧推进统一交给 PetController。 */
+function petSprApply(){
+  const spr = petSpriteDef();
+  const el = petEl.querySelector('.p-spr');
+  if (!spr || !el) return;
+  const url = petSpriteURLs[spr.slug];
+  if (url) {
+    const full = new URL(url, location.href).href;
+    if (el.dataset.bgLoaded !== full) {
+      const im = new Image();
+      im.onload = () => {
+        el.dataset.bgLoaded = full;
+        if (petSpriteDef() === spr) petController.refresh();
+      };
+      im.onerror = () => { el.dataset.bgLoaded = 'err'; };
+      im.src = full;
+    }
+    el.style.backgroundImage = 'url("' + full + '")';
+  }
+  petEl.classList.add('spr-on');
+  petController.refresh();
+}
+
+function petSetMood(m){
+  petMood = m;
+  petEl.dataset.mood = m;
+  if (!petKindIsSprite(petState.kind)) return;
+  const action = { happy:'jumping', sleep:'waiting', walk:'running' }[m];
+  if (action) petController.trigger(action);
+  else petController.setCallState(document.body.dataset.state || 'idle');
+}
+function petSetFacing(dir){ petEl.classList.toggle('flip', dir < 0); }
+
+function petToStage(){   // 回舞台中央
+  petEl.classList.remove('roaming');
+  petEl.style.left = ''; petEl.style.top = '';
+  document.body.classList.remove('pet-away');
+  petAway = false;
+}
+function petToHome(){    // 回它的存档窝（拖动过才有），没有就是舞台
+  const h = petHome();
+  if (!h || petState.mode !== 'pet') { petToStage(); return; }
+  petAway = true;
+  petEl.classList.add('roaming');
+  document.body.classList.add('pet-away');
+  petEl.style.left = h.x + 'px'; petEl.style.top = h.y + 'px';
+}
+
+function petApplyMode(){
+  document.body.classList.toggle('pet-mode', petState.mode === 'pet');
+  if (petState.mode !== 'pet') { petStopRoam(); petSetMood('idle'); petToStage(); petRenderPanel(); return; }
+  petMountDrawing();
+  if (petHome()) petToHome(); else petToStage();
+  petSetMood('idle');
+  petScheduleRoam();
+  petIdleActs();
+  petRenderPanel();
+}
+function petApplyKind(){
+  petMountDrawing();
+  petSetMood(petMood);   // 重建 DOM 后把 data-mood 重新套上（动画类全在 CSS 里）
+}
+
+/* ---- Codex 宠物：从服务端拉安装列表 → 填进面板；当前选中项失效时回退到猫猫 ---- */
+async function petRefreshSprites(){
+  try {
+    const r = await fetch('/v1/pets', { cache:'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    petSprites.length = 0; petSpriteURLs = {};
+    for (const p of (j.pets || [])) {
+      petSprites.push({ slug:p.slug, name:p.displayName || p.slug, creator:p.creator || 'Community',
+                        description:p.description || '', spriteUrl:p.spriteUrl });
+      petSpriteURLs[p.slug] = p.spriteUrl || ('/v1/pets/' + encodeURIComponent(p.slug) + '/asset');
+    }
+    if (petKindIsSprite(petState.kind) && !petSpriteDef()) {   // 存档的宠物被删了
+      petState.kind = 'cat'; petSave();
+    }
+    if (petState.mode === 'pet') { petMountDrawing(); petSetMood(petMood); }
+    petRenderPanel();
+  } catch (e) { /* 通话服务未启动时不打扰 */ }
+}
+/* 安装一只 Codex 宠物：可传 id 或完整 npx 命令，装好自动选中 */
+async function petInstallSprite(input){
+  const info = $('petInfo');
+  const button = $('petInstallGo');
+  button.disabled = true;
+  info.textContent = '正在通过 codex-pet-installer 安装…';
+  try {
+    const r = await fetch('/v1/pets/install?input=' + encodeURIComponent(input), { method:'POST' });
+    const j = await r.json();
+    if (!j.ok) { info.textContent = '⚠ ' + (j.message || '安装失败'); return false; }
+    await petRefreshSprites();
+    petState.kind = 'codex:' + j.slug; petState.mode = 'pet'; petSave();
+    petApplyMode();
+    info.textContent = '✅ ' + (j.message || j.slug) + ' 已入住～已帮你切换到它';
+    return true;
+  } catch (e) {
+    info.textContent = '⚠ 安装失败：' + e.message;
+    return false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function petRemoveSprite(slug){
+  const info = $('petInfo');
+  if (!confirm('确定删除 Codex 宠物 “' + slug + '” 吗？')) return false;
+  info.textContent = '正在删除 ' + slug + ' …';
+  try {
+    const r = await fetch('/v1/pets/' + encodeURIComponent(slug), { method:'DELETE' });
+    const j = await r.json();
+    if (!j.ok) { info.textContent = '⚠ ' + (j.message || '删除失败'); return false; }
+    if (petState.kind === 'codex:' + slug) {
+      petState.kind = 'cat'; petSave(); petApplyKind();
+    }
+    await petRefreshSprites();
+    info.textContent = '✅ ' + slug + ' 已删除';
+    return true;
+  } catch (e) {
+    info.textContent = '⚠ 删除失败：' + e.message;
+    return false;
+  }
+}
+
+// 待机小动作：每 4~9 秒抖抖耳朵 / 原地小蹦 / 甩甩尾巴
+function petIdleActs(){
+  if (petIdleActTimer) clearTimeout(petIdleActTimer);
+  const loop = () => {
+    petIdleActTimer = setTimeout(() => {
+      if (petState.mode === 'pet' && petMood === 'idle' && !document.hidden) {
+        const cls = ['act-ear', 'act-hop', 'act-tail'][Math.floor(Math.random() * 3)];
+        petEl.classList.add(cls);
+        setTimeout(() => petEl.classList.remove(cls), 1300);
+      }
+      loop();
+    }, 4000 + Math.random() * 5000);
+  };
+  loop();
+}
+
+// 面板点动作：立刻表演（睡觉保持，其余 4 秒后回待机）
+function petPerform(m){
+  if (petState.mode !== 'pet') { $('petInfo').textContent = '先把舞台显示切成「桌宠」～'; return; }
+  if (petRoamTimer) { clearTimeout(petRoamTimer); petRoamTimer = null; }
+  if (m === 'walk') { petStartRoam(); petRenderPanel(); return; }
+  petStopRoamNow(true);
+  petSetMood(m);
+  if (m !== 'idle') {
+    setTimeout(() => {
+      if (petMood === m) {
+        petSetMood('idle');
+        if (petState.roam) petScheduleRoam();
+      }
+    }, 4000);
+  }
+  petRenderPanel();
+}
+function petBounce(){   // 点一下：开心 2.2 秒 + 冒爱心（精灵图宠物用漂浮爱心代替 SVG 心）
+  if (petDrag && petDrag.moved) return;
+  petSetMood('happy');
+  const svg = petEl.querySelector('svg');
+  if (svg) {
+    for (let i = 0; i < 3; i++) {
+      const h = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      h.setAttribute('d', 'M0 0 C -4 -5, -11 -2, -7 4 L 0 11 L 7 4 C 11 -2, 4 -5, 0 0 Z');
+      h.setAttribute('class', 'p-heart');
+      h.setAttribute('fill', '#f08a92');
+      h.setAttribute('style', '--hdx:' + ((i - 1) * 10 + (Math.random() * 8 - 4)) + 'px; animation-delay:' + (i * 0.16) + 's');
+      h.setAttribute('transform', 'translate(' + (92 + i * 9) + ' 62)');
+      svg.appendChild(h);
+      setTimeout(() => h.remove(), 1400);
+    }
+  } else if (petEl.classList.contains('sprite-pet')) {
+    for (let i = 0; i < 3; i++) {   // HTML 漂浮爱心（精灵图没有 SVG 画布可挂）
+      const h = document.createElement('span');
+      h.className = 'p-heart p-heart-html';
+      h.textContent = '❤';
+      h.style.setProperty('--hdx', ((i - 1) * 12 + (Math.random() * 8 - 4)) + 'px');
+      h.style.animationDelay = (i * 0.16) + 's';
+      h.style.left = (38 + i * 10) + '%';
+      petEl.appendChild(h);
+      setTimeout(() => h.remove(), 1400);
+    }
+  }
+  setTimeout(() => { if (petMood === 'happy') petSetMood('idle'); }, 2200);
+}
+
+// 自动溜达：25~65 秒后出门，屏幕下半区随机散步 8~15 秒回家；手机屏禁用
+function petScheduleRoam(){
+  if (petRoamTimer) clearTimeout(petRoamTimer);
+  petRoamTimer = null;
+  if (!petState.roam || petState.mode !== 'pet') return;
+  if (matchMedia('(max-width: 700px)').matches) return;
+  petRoamTimer = setTimeout(() => { petRoamTimer = null; if (petState.roam) petStartRoam(); },
+    25000 + Math.random() * 40000);
+}
+function petStopRoam(){ if (petRoamTimer) { clearTimeout(petRoamTimer); petRoamTimer = null; } }
+function petWalkAnim(){ petSetMood('walk'); }
+function petStopRoamNow(goIdle){
+  petStopRoam();
+  if (petWalkFrame) { cancelAnimationFrame(petWalkFrame); petWalkFrame = null; }
+  petController.stopRoaming();
+  petEl.classList.remove('flip');
+  const h = petHome();
+  if (h && petState.mode === 'pet') petToHome();
+  else petToStage();
+  if (goIdle !== false) petSetMood('idle');
+}
+function petStartRoam(){
+  if (petState.mode !== 'pet' || matchMedia('(max-width: 700px)').matches) return;
+  petStopRoam();
+  const dw = petEl.offsetWidth || 140, dh = petEl.offsetHeight || 140;
+  const m = 14, topMin = 90, bottomPad = 150;
+  const x = m + Math.random() * Math.max(40, innerWidth - dw - m * 2);
+  const y = Math.max(topMin, innerHeight - bottomPad - dh + Math.random() * Math.max(20, innerHeight - bottomPad - topMin - dh));
+  // 目标点定好后用 rAF 滑行过去：走路动画照播，位置连续变化 = 真的"走"过去（还会调头）
+  const origin = petEl.getBoundingClientRect();
+  petAway = true;
+  petEl.classList.add('roaming');
+  petEl.style.left = origin.left + 'px'; petEl.style.top = origin.top + 'px';
+  document.body.classList.add('pet-away');
+  const sx = origin.left, sy = origin.top;
+  const dist = Math.hypot(x - sx, y - sy);
+  const dur = Math.max(2200, Math.min(6000, dist * 9));
+  const t0 = performance.now();
+  petSetFacing(x >= sx ? 1 : -1);
+  petMood = 'walk';
+  petEl.dataset.mood = 'walk';
+  if (petKindIsSprite(petState.kind)) petController.setRoaming(x >= sx ? 1 : -1);
+  else petWalkAnim();
+  const step = now => {
+    if (petMood !== 'walk') return;
+    let t = Math.min(1, (now - t0) / dur);
+    const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;   // easeInOut
+    petEl.style.left = (sx + (x - sx) * e) + 'px';
+    petEl.style.top = (sy + (y - sy) * e) + 'px';
+    if (t < 1) petWalkFrame = requestAnimationFrame(step);
+    else {
+      petWalkFrame = null;
+      setTimeout(() => {
+        if (petMood !== 'walk') return;
+        petStopRoamNow();
+        if (petState.roam) petScheduleRoam();
+        petRenderPanel();
+      }, 6000 + Math.random() * 5000);
+    }
+  };
+  petWalkFrame = requestAnimationFrame(step);
+  petRenderPanel();
+}
+
+// 拖拽：拖到哪儿就住哪儿；点一下（没拖动）开心蹦
+petEl.addEventListener('pointerdown', e => {
+  if (e.button !== undefined && e.button !== 0) return;
+  petDrag = { sx:e.clientX, sy:e.clientY, ox:petEl.offsetLeft, oy:petEl.offsetTop, moved:false };
+  try { petEl.setPointerCapture(e.pointerId); } catch (err) {}
+});
+petEl.addEventListener('pointermove', e => {
+  if (!petDrag) return;
+  const dx = e.clientX - petDrag.sx, dy = e.clientY - petDrag.sy;
+  if (!petDrag.moved && Math.hypot(dx, dy) < 5) return;
+  if (!petDrag.moved) {   // 刚判定为拖动：停掉走路动画，拎起来
+    petDrag.moved = true;
+    if (petWalkFrame) { cancelAnimationFrame(petWalkFrame); petWalkFrame = null; }
+    petController.stopRoaming();
+    petEl.classList.add('dragging');
+    if (!petEl.classList.contains('roaming')) {
+      const r = petEl.getBoundingClientRect();
+      petEl.classList.add('roaming');
+      petEl.style.left = r.left + 'px'; petEl.style.top = r.top + 'px';
+      document.body.classList.add('pet-away');
+      petAway = true;
+    }
+  }
+  petEl.style.left = Math.max(4, Math.min(petDrag.ox + dx, innerWidth - petEl.offsetWidth - 4)) + 'px';
+  petEl.style.top = Math.max(4, Math.min(petDrag.oy + dy, innerHeight - petEl.offsetHeight - 4)) + 'px';
+});
+petEl.addEventListener('pointerup', e => {
+  if (!petDrag) return;
+  const moved = petDrag.moved;
+  petDrag = null;
+  petEl.classList.remove('dragging');
+  if (moved) {
+    petDragged = true;
+    petState.home = { x:petEl.offsetLeft, y:petEl.offsetTop };   // 新家存档
+    petAway = true;
+    petSave();
+    if (petMood === 'walk') petSetMood('idle');
+    petScheduleRoam();
+  } else petBounce();
+});
+petEl.addEventListener('pointercancel', () => {
+  if (petDrag && petDrag.moved) {
+    petState.home = { x:petEl.offsetLeft, y:petEl.offsetTop };
+    petAway = true; petSave();
+  }
+  petDrag = null;
+  petEl.classList.remove('dragging');
+});
+
+// ---- 宠物设置面板 ----
+function petChipRow(boxId, items, activeId, onPick){
+  const box = $(boxId); box.innerHTML = '';
+  items.forEach(it => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'prof-item' + (it.id === activeId ? ' on' : '');
+    b.textContent = it.name;
+    b.onclick = () => onPick(it.id);
+    box.appendChild(b);
+  });
+}
+function petRenderPanel(){
+  if ($('petPanel').classList.contains('hidden')) return;
+  petChipRow('petModes', [{ id:'orb', name:'🥇 金色圆盘' }, { id:'pet', name:'🐱 桌宠' }], petState.mode,
+    id => { petState.mode = id; petSave(); petApplyMode(); });
+  petChipRow('petKinds', PET_KINDS, petState.kind,
+    id => { petState.kind = id; petSave(); petApplyKind(); petRenderPanel(); });
+  const kinds = $('petKinds');
+  petSprites.forEach(p => {
+    const group = document.createElement('span'); group.className = 'pet-kind-installed';
+    const pick = document.createElement('button'); pick.type = 'button';
+    pick.className = 'prof-item' + (petState.kind === 'codex:' + p.slug ? ' on' : '');
+    pick.textContent = '🐾 ' + p.name;
+    pick.onclick = () => { petState.kind = 'codex:' + p.slug; petSave(); petApplyKind(); petRenderPanel(); };
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'pet-kind-remove';
+    remove.textContent = '删除'; remove.title = '删除 ' + p.name;
+    remove.onclick = () => petRemoveSprite(p.slug);
+    group.append(pick, remove); kinds.appendChild(group);
+  });
+  petChipRow('petMoods', PET_MOODS, petMood, id => petPerform(id));
+  $('petRoamToggle').textContent = petState.roam ? '关闭溜达' : '开启溜达';
+  $('petRoamToggle').classList.toggle('btn-gold', petState.roam);
+  $('petRoamToggle').classList.toggle('btn-dim', !petState.roam);
+}
+/* 「安装 Codex 宠物」：输入宠物 id（codex-pet.org 页面 slug），一键拉到本地 */
+$('petInstallGo').onclick = () => {
+  const input = ($('petInstallId').value || '').trim();
+  if (!input) { $('petInfo').textContent = '请填宠物 id 或 npm 安装命令'; return; }
+  petInstallSprite(input);
+};
+$('petInstallMax').onclick = () => { $('petInstallId').value = 'max-chatgpt-pet'; petInstallSprite('max-chatgpt-pet'); };
+$('petBtn').onclick = () => {
+  ['modelPanel', 'voicePanel', 'personaPanel', 'bgPanel'].forEach(id => $(id).classList.add('hidden'));
+  $('petPanel').classList.remove('hidden');
+  petRenderPanel();
+};
+$('petClose').onclick = () => $('petPanel').classList.add('hidden');
+document.querySelectorAll('#petModes .prof-item').forEach(b => b.onclick = () => {
+  petState.mode = b.dataset.mode; petSave(); petApplyMode();
+});
+$('petRoamToggle').onclick = () => {
+  petState.roam = !petState.roam; petSave();
+  if (petState.roam) petStartRoam();
+  else { petStopRoamNow(); petRenderPanel(); }
+  petRenderPanel();
+};
+$('petRoamNow').onclick = () => { if (petState.mode === 'pet') petStartRoam(); };
+
+// 通话联动：她说话时宠物蹦跳摇尾巴；打字条发言也会张嘴"说话"
+const _petStateObs = new MutationObserver(() => {
+  const st = document.body.dataset.state;
+  if (st === 'speaking') petEl.classList.add('talk'); else petEl.classList.remove('talk');
+  petController.setCallState(st || 'idle');
+});
+_petStateObs.observe(document.body, { attributes:true, attributeFilter:['data-state'] });
+
+// 启动：恢复上次的宠物选择
+try {
+  const savedPet = JSON.parse(localStorage.getItem(PET_KEY) || 'null');
+  if (savedPet) petState = {
+    mode: savedPet.mode === 'pet' ? 'pet' : 'orb',
+    kind: savedPet.kind || 'cat',
+    roam: !!savedPet.roam,
+    home: (savedPet.home && typeof savedPet.home.x === 'number') ? savedPet.home : null,
+  };
+} catch (e) {}
+petApplyMode();
+petRefreshSprites();   // 拉 Codex 宠物安装列表（含一键装的 Max）；装过的话开机即显示精灵宠物
+function startCall(){
+  const my = ++callEpoch;
+  document.body.dataset.state = 'dialing';
+  petController.setCallState('dialing');
+  let c;
+  c = new VoiceCall({
+    url,   // VAD 参数用 voice-call.js 内置默认（M2：自适应停句+两阶段打断）
+    on: {
+      state: m => { if (call !== c) return; document.body.dataset.state = m; petController.setCallState(m); $('state').textContent = STATE_TXT[m] || m; },
+      speech: active => { if (active) petController.trigger('waving'); },
+      level: v => { if (call === c && !c.playing) rings(v, 14); },
+      himLevel: v => { if (call === c && c.playing) rings(v, 3); },
+      transcript: e => addSub('line-me', '我：' + e.text),
+      reply: e => { petController.trigger('review'); renderReply(e.text); },
+      error: e => { petController.trigger('failed'); addSub('line-zh', '⚠ ' + e); },
+      playbackComplete: () => { petController.trigger('jumping'); },
+      latency: ms => { $('lat').textContent = '开口 ' + ms + 'ms'; },
+      hangupSoon: () => { if (call !== c) return; document.body.dataset.state = 'hangupSoon'; $('state').textContent = '道别中…'; },
+      config: e => { fillCfg(e); fillPersona(e.persona);
+        if (voiceSaving) { voiceSaving = false; $('voiceInfo').textContent = '已保存 ✓ 音色立即生效'; }
+        if (promptSaving) { promptSaving = false; $('cfgInfo').textContent = '已保存 ✓ 人设下次回复生效'; }
+        if (psSaving) { psSaving = false; $('psInfo').textContent = '已保存 ✓ 下次回复生效'; }
+        if (pendingUse) { pendingUse = false; $('cfgTestResult').textContent = '已切换 ✓ 大脑已换到该配置'; }  // profile_use 的回执（fillCfg 已把当前值刷进表单）
+      },
+      configError: e => {
+        const msg = '⚠ ' + (e.error || '保存失败');
+        if (voiceSaving) { voiceSaving = false; $('voiceInfo').textContent = msg; }
+        else if (psSaving) { psSaving = false; $('psInfo').textContent = msg; }
+        else { promptSaving = false; $('cfgInfo').textContent = msg; }
+        // config_error 后服务端还会补发一条 config 快照，前端正常吃掉刷新表单即可
+      },
+      profiles: e => { renderProfiles(e.profiles || [], e.active || ''); if (e.saved_id) selProfileId = e.saved_id;
+        $('cfgTestResult').textContent = e.saved_id ? '已保存 ✓ 列表已更新' : '';   // 清"保存中…"（saved_id 为空 = 删除操作）
+        if (pendingUse) { pendingUse = false; c._send({ type: 'profile_use', id: e.saved_id }); } },
+      profileError: e => { $('cfgTestResult').textContent = '⚠ ' + (e.error || '失败'); },
+      profileTest: e => { $('cfgPTest').disabled = false; $('cfgPTest').textContent = '测 试 连 接';
+        $('cfgTestResult').textContent = e.ok
+          ? ('✅ 连接成功（' + e.latency_ms + 'ms）模型: ' + (e.model || '-') + '\n回复: ' + (e.reply || '(空)'))
+          : ('❌ 连接失败（' + e.latency_ms + 'ms）\n' + (e.error || '未知错误')); },
+      autoHangup: () => {   // 自然挂断（COVE §16）：服务端收线 → 停在空闲态，按钮变绿待拨
+        if (call !== c) return;
+        if (window._hb) clearInterval(window._hb);
+        document.body.dataset.state = 'closed';
+        $('state').textContent = '已挂断';
+        try { c.hangup(); } catch (e) {}
+        call = null;
+        setInCall(false);
+      },
+      closed: () => {       // WS 关闭（网络断/本端挂断）：停在空闲态，可重新拨打
+        if (call !== c) return;
+        if (window._hb) clearInterval(window._hb);
+        document.body.dataset.state = 'closed';
+        $('state').textContent = '已挂断';
+        call = null;
+        setInCall(false);
+      }
+    }
+  });
+  call = c;
+  c.start().then(() => {
+    if (call !== c) { try { c.hangup(); } catch (e) {} return; }   // 接通前已被挂断
+    $('textrow').classList.remove('hidden');   // 接通后亮出打字条
+    layApply(TEXT_KEY);                        // 打字条有浮层存档则在显示后落位（隐藏时 placeFloat 会跳过）
+    // 接通即发标记：他先开口说第一声（措辞协议：[接通了] = 她刚接起）
+    setTimeout(() => { if (call === c) call.sendText('[接通了]'); }, 300);
+    // 心跳：防 Zeabur ingress / 手机 NAT 空闲断链（server 忽略未知类型，安全）
+    window._hb = setInterval(() => { if (call) try { call._send({ type: 'ping' }); } catch (e) {} }, 25000);
+  }).catch(e => {
+    if (call !== c) return;
+    petController.trigger('failed');
+    addSub('line-zh', '连接失败：' + e.message);
+    document.body.dataset.state = 'closed';
+    $('state').textContent = '连接失败';
+    call = null;
+    setInCall(false);
+  });
+  return c;
+}
+
+// 浏览器自动播放策略：无手势时 AudioContext 挂起，首次点击解锁声音
+document.addEventListener('pointerdown', () => {
+  if (call && call.ctx && call.ctx.state === 'suspended') call.ctx.resume();
+}, true);
+
+// 自由布局生效：拖动移位 / 双击显示隐藏 / 面板重置，位置存 localStorage
+makeDraggable(document.querySelector('.orb-wrap'), ORB_KEY);
+makeDraggable($('sub'), SUB_KEY);
+makeDraggable($('mute'), MUTE_KEY);
+makeDraggable($('hang'), HANG_KEY);
+makeDraggable($('textrow'), TEXT_KEY, { fromInput: true });   // 打字条：点住输入框本身也能拖
+layApply(ORB_KEY); layApply(SUB_KEY); layApply(MUTE_KEY); layApply(HANG_KEY); layApply(TEXT_KEY);
+addEventListener('resize', () => {   // 窗口缩放后把各浮层夹回屏幕内
+  for (const k of [ORB_KEY, SUB_KEY, MUTE_KEY, HANG_KEY, TEXT_KEY]) {
+    const s = layGet(k);
+    if (s.x !== undefined && !s.hidden) {
+      const el = layEl(k);
+      placeFloat(el, s.x, s.y, s.cx, s.w);
+      localStorage.setItem(k, JSON.stringify(s));
+    }
+  }
+});
+
+// 打开页面即自动接通，无需任何设置
+startCall();
+
+$('hang').onclick = () => {
+  if (call) {   // 通话中 → 挂断：结束通话，按钮变绿，不自动重连
+    if (window._hb) clearInterval(window._hb);
+    document.body.dataset.state = 'closed';
+    $('state').textContent = '已挂断';
+    try { call.hangup(); } catch (e) {}
+    call = null;
+    setInCall(false);
+  } else {      // 空闲 → 重新拨打：按钮变红，接通后恢复通话
+    setInCall(true);
+    $('state').textContent = '正在接通…';
+    document.body.dataset.state = 'dialing';
+    startCall();
+  }
+};
+$('mute').onclick = () => { muted = !muted; $('mute').classList.toggle('off', muted);
+  if (call?.stream) call.stream.getAudioTracks().forEach(t => t.enabled = !muted); };
+
+// ---- 设置：右上角两个面板——模型/API 配置（含人设）+ 音色/说话人 ----
+let cfgData = null, selProfileId = null, pendingUse = false, promptSaving = false, voiceSaving = false;
+
+function fillCfg(e){
+  cfgData = e;
+  // 大脑当前值 -> 表单（新增配置时以此为默认）
+  $('cfgPUrl').value = e.gateway_url || '';
+  $('cfgPKey').value = e.gateway_token || '';
+  $('cfgPModel').value = e.llm_model || '';
+  $('cfgPName').value = '';
+  const dl = $('cfgModelList'); dl.innerHTML = '';   // 本地 Ollama 时给模型建议；云端端点可自由输入
+  (e.llm_models || []).forEach(name => { const o = document.createElement('option'); o.value = name; dl.appendChild(o); });
+  renderProfiles(e.profiles || [], e.active_profile || '');
+  const v = $('cfgVoice'); v.innerHTML = '';
+  (e.voices || []).forEach(name => {
+    const o = document.createElement('option'); o.value = name; o.textContent = name; v.appendChild(o);
+  });
+  v.value = e.voice || '';
+  const sp = (e.speakers || {})[e.voice || ''] || 1;   // 当前音色的说话人数
+  $('cfgSid').value = (e.voice_sid !== undefined ? e.voice_sid : 0);
+  $('cfgSid').max = Math.max(0, sp - 1);
+  $('cfgPrompt').value = e.system_prompt || '';
+  $('voiceInfo').textContent = '耳朵: ' + (e.asr || '-') + ' · 嘴: ' + (e.tts || '-') + ' · 当前音色含 ' + sp + ' 个说话人';
+}
+
+function renderProfiles(profiles, active){
+  const box = $('cfgProfiles'); box.innerHTML = '';
+  if (!profiles || !profiles.length) {
+    const d = document.createElement('span'); d.className = 'prof-item'; d.textContent = '（还没有配置，填下面表单保存一个）';
+    d.style.cursor = 'default'; box.appendChild(d); return;
+  }
+  profiles.forEach(p => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'prof-item' + (p.id === active ? ' on' : '');
+    b.title = p.url;
+    b.textContent = (p.id === active ? '✓ ' : '') + (p.name || p.model || p.id);
+    b.onclick = () => {
+      selProfileId = p.id;
+      $('cfgPName').value = p.name || '';
+      $('cfgPUrl').value = p.url || '';
+      $('cfgPKey').value = p.key || '';
+      $('cfgPModel').value = p.model || '';
+      $('cfgTestResult').textContent = '';
+    };
+    box.appendChild(b);
+  });
+}
+
+function profileForm(){
+  return {
+    id: selProfileId,
+    name: $('cfgPName').value.trim(),
+    url: $('cfgPUrl').value.trim(),
+    key: $('cfgPKey').value.trim(),
+    model: $('cfgPModel').value.trim(),
+  };
+}
+
+function togglePanel(panelId, otherIds, infoId){
+  const p = $(panelId); const willShow = p.classList.contains('hidden');
+  for (const o of otherIds) $(o).classList.add('hidden');
+  p.classList.toggle('hidden');
+  if (willShow) {
+    if (call) { $(infoId).textContent = '读取配置中…'; call._send({ type: 'config_get' }); }
+    else $(infoId).textContent = '未连接，无法读取配置';
+  }
+}
+$('modelBtn').onclick = () => togglePanel('modelPanel', ['voicePanel', 'personaPanel'], 'cfgInfo');
+$('voiceBtn').onclick = () => togglePanel('voicePanel', ['modelPanel', 'personaPanel'], 'voiceInfo');
+$('modelClose').onclick = () => $('modelPanel').classList.add('hidden');
+$('voiceClose').onclick = () => $('voicePanel').classList.add('hidden');
+$('cfgPSave').onclick = () => {
+  if (!call) return;
+  const f = profileForm();
+  if (!f.name || !f.url) { $('cfgTestResult').textContent = '⚠ 配置名称和 API 地址必填'; return; }
+  $('cfgTestResult').textContent = '保存中…';
+  call._send({ type: 'profile_save', profile: f });
+};
+$('cfgPUse').onclick = () => {
+  if (!call) return;
+  const f = profileForm();
+  if (!f.name || !f.url) { $('cfgTestResult').textContent = '⚠ 配置名称和 API 地址必填'; return; }
+  pendingUse = true; $('cfgTestResult').textContent = '保存并切换中…';
+  call._send({ type: 'profile_save', profile: f });
+};
+$('cfgPDel').onclick = () => {
+  if (!call || !selProfileId) { $('cfgTestResult').textContent = '⚠ 先在列表里选一个配置'; return; }
+  if (!confirm('删除这个 API 配置？')) return;
+  call._send({ type: 'profile_delete', id: selProfileId });
+  selProfileId = null;
+};
+$('cfgPTest').onclick = () => {
+  if (!call) return;
+  const f = profileForm();
+  if (!f.url) { $('cfgTestResult').textContent = '⚠ 先填 API 地址'; return; }
+  $('cfgPTest').disabled = true; $('cfgPTest').textContent = '测试中…';
+  $('cfgTestResult').textContent = '正在请求 ' + f.url + ' …';
+  call._send({ type: 'profile_test', url: f.url, key: f.key, model: f.model });
+};
+$('voiceSave').onclick = () => {
+  if (!call) return;
+  const req = { type: 'config_set' };
+  const v = $('cfgVoice').value, sid = parseInt($('cfgSid').value, 10);
+  if (cfgData && v !== cfgData.voice) req.voice = v;
+  if (cfgData && Number.isInteger(sid) && sid >= 0 && sid !== cfgData.voice_sid) req.voice_sid = sid;
+  if (Object.keys(req).length > 1) { voiceSaving = true; $('voiceInfo').textContent = '保存中…'; call._send(req); }
+  else $('voiceInfo').textContent = '没有改动';
+};
+$('cfgPromptSave').onclick = () => {
+  if (!call) return;
+  const pr = $('cfgPrompt').value;
+  // system_prompt 回显是"人设指令 + 用户提示词"的合成版，只在用户改动 textarea 时才发
+  if (cfgData && pr !== cfgData.system_prompt) {
+    promptSaving = true; $('cfgInfo').textContent = '保存中…';
+    call._send({ type: 'config_set', system_prompt: pr });
+  } else $('cfgInfo').textContent = '没有改动';
+};
+
+// ---- 人设面板：称呼（她的昵称/他的名字）+ 聊天语气/风格（预设标签 + 自定义）----
+let psOptions = { tones: [], styles: [] }, psPicked = { tone: 'default', style: 'default' }, psSaving = false;
+
+function psChips(boxId, options, pickedKey, onPick){
+  const box = $(boxId); box.innerHTML = '';
+  options.forEach(o => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'prof-item' + (o.key === pickedKey ? ' on' : '');
+    b.textContent = o.key === 'custom' ? '自定义' : (o.key === 'default' ? '默认' : (o.text || o.key).split(/[，。]/)[0].slice(0, 8));
+    b.title = o.text || '';
+    b.onclick = () => onPick(o.key);
+    box.appendChild(b);
+  });
+}
+function psSyncFree(){
+  $('psToneFree').classList.toggle('hidden', psPicked.tone !== 'custom');
+  $('psStyleFree').classList.toggle('hidden', psPicked.style !== 'custom');
+}
+function fillPersona(p){   // config 快照里的人设段 -> 表单
+  if (!p) return;
+  psOptions.tones = p.tone_options || [];
+  psOptions.styles = p.style_options || [];
+  psPicked.tone = p.tone || 'default';
+  psPicked.style = p.style || 'default';
+  $('psPetName').value = p.pet_name || '';
+  $('psHisName').value = p.his_name || '';
+  $('psToneFree').value = p.tone_free || '';
+  $('psStyleFree').value = p.style_free || '';
+  fillPersonaRedraw();
+  psSyncFree();
+}
+function fillPersonaRedraw(){   // 点选后重画两组标签的选中态
+  psChips('psTones', psOptions.tones, psPicked.tone, k => { psPicked.tone = k; psSyncFree(); fillPersonaRedraw(); });
+  psChips('psStyles', psOptions.styles, psPicked.style, k => { psPicked.style = k; psSyncFree(); fillPersonaRedraw(); });
+}
+$('personaBtn').onclick = () => togglePanel('personaPanel', ['modelPanel', 'voicePanel'], 'psInfo');
+$('psClose').onclick = () => $('personaPanel').classList.add('hidden');
+$('psSave').onclick = () => {
+  if (!call) return;
+  psSaving = true; $('psInfo').textContent = '保存中…';
+  call._send({ type: 'config_set', persona: {
+    pet_name: $('psPetName').value.trim(),
+    his_name: $('psHisName').value.trim(),
+    tone: psPicked.tone,
+    style: psPicked.style,
+    tone_free: $('psToneFree').value.trim(),
+    style_free: $('psStyleFree').value.trim(),
+  }});
+};
+
+// 打字条：不想说出口的字，打给他。服务端回 transcript 回显到字幕，本地不重复显示。
+function sendTyped(){
+  const box = $('sayText');
+  const t = box.value.trim();
+  if (!t || !call) return;
+  box.value = '';
+  call.sendText(t);
+}
+$('typedSend').onclick = sendTyped;
+$('sayText').addEventListener('keydown', e => { if (e.key === 'Enter') sendTyped(); });
+
+// ---- 背景切换：内置金色 / Wallpaper Engine 壁纸（服务端代读）/ 本地上传 / 图片 URL ----
+const BG_KEY = 'paivoice_bg';
+let bgObjectUrl = null;
+
+function idbOpen(){ return new Promise((res, rej) => {
+  const q = indexedDB.open('paivoice', 1);
+  q.onupgradeneeded = () => q.result.createObjectStore('kv');
+  q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+function idbSet(k, v){ return idbOpen().then(db => new Promise((res, rej) => {
+  const tx = db.transaction('kv', 'readwrite');
+  tx.objectStore('kv').put(v, k);
+  tx.oncomplete = () => { db.close(); res(); }; tx.onerror = () => { db.close(); rej(tx.error); }; })); }
+function idbGet(k){ return idbOpen().then(db => new Promise((res, rej) => {
+  const rq = db.transaction('kv').objectStore('kv').get(k);
+  rq.onsuccess = () => { db.close(); res(rq.result); }; rq.onerror = () => { db.close(); rej(rq.error); }; })); }
+
+function bgChips(mode){
+  document.querySelectorAll('#bgModes .prof-item').forEach(b => b.classList.toggle('on', b.dataset.mode === mode)); }
+function bgRows(mode){
+  $('bgUrlRow').classList.toggle('hidden', mode !== 'url');
+  $('bgUploadRow').classList.toggle('hidden', mode !== 'upload');
+  $('bgWeRow').classList.toggle('hidden', mode !== 'wallpaper');
+  if (mode === 'wallpaper') loadWeGrid();
+}
+
+// ---- Wallpaper 壁纸挑选网格：服务端列已装壁纸，点缩略图即换背景（不动 WE 本体）----
+let weItems = [], wePicked = '';
+
+async function loadWeGrid(){
+  const grid = $('weGrid');
+  if (grid.dataset.loaded) return;   // 面板每次展开都刷一遍，跟 WE 里最新列表保持一致
+  grid.dataset.loaded = '1';
+  $('bgInfo').textContent = '读取 Wallpaper 列表…';
+  try {
+    const r = await fetch('/v1/wallpaper-engine/list', { cache: 'no-store' });
+    if (!r.ok) throw new Error('列表读取失败（' + r.status + '）');
+    const j = await r.json();
+    weItems = j.items || [];
+    if (!wePicked) wePicked = localStorage.getItem('paivoice_we_id') || (j.current || '');
+    renderWeGrid();
+    $('bgInfo').textContent = '';
+  } catch (e) {
+    grid.dataset.loaded = ''; $('bgInfo').textContent = '⚠ ' + (e.message || e);
+  }
+}
+function renderWeGrid(){
+  const grid = $('weGrid'); grid.innerHTML = '';
+  for (const it of weItems) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'we-item' + (it.id === wePicked ? ' on' : '');
+    b.title = it.title;
+    if (it.preview) {
+      const img = document.createElement('img');
+      img.loading = 'lazy'; img.alt = it.title;
+      img.src = '/v1/wallpaper-engine?id=' + it.id + '&thumb=1';   // 网格用小预览图，点选后背景才拉高清原图
+      b.appendChild(img);
+      const cap = document.createElement('div');
+      cap.className = 'we-t'; cap.textContent = it.title;
+      b.appendChild(cap);
+    } else {
+      b.classList.add('noprev'); b.textContent = it.title;   // 无预览图的工程（纯音频可视化等）
+    }
+    b.onclick = async () => {
+      wePicked = it.id;
+      localStorage.setItem('paivoice_we_id', it.id);
+      renderWeGrid();
+      await applyBg('wallpaper', { id: it.id, silent: true });
+      $('bgInfo').textContent = '背景已更新 ✓（' + it.title + '）';
+    };
+    grid.appendChild(b);
+  }
+}
+function setBgPhoto(source){
+  clearBgVideo();
+  if (bgObjectUrl) { URL.revokeObjectURL(bgObjectUrl); bgObjectUrl = null; }
+  const layer = $('bgPhoto'), back = $('bgPhotoBg');
+  let u;
+  if (source.kind === 'url') u = source.url;
+  else { bgObjectUrl = URL.createObjectURL(source.blob); u = bgObjectUrl; }
+  layer.style.backgroundImage = 'url("' + u + '")';
+  back.style.backgroundImage = 'url("' + u + '")';   // 底层同图模糊铺满补边
+  document.body.classList.add('bg-photo');
+}
+function setBgVideo(id){
+  clearBgPhoto();
+  const v = $('bgVideo'), vb = $('bgVideoBg');
+  if (v.dataset.id !== id) {   // 同一张不重载，续播
+    v.dataset.id = id;
+    const src = '/v1/wallpaper-engine/video?id=' + encodeURIComponent(id);
+    v.src = src; vb.src = src;
+    v.play().catch(() => {}); vb.play().catch(() => {});  // 自动播放被拦时静默降级：首帧/静图当背景
+  }
+  document.body.classList.add('bg-video');
+}
+function clearBgVideo(){
+  for (const v of [$('bgVideo'), $('bgVideoBg')]) {
+    v.pause(); v.removeAttribute('src'); v.load(); delete v.dataset.id;
+  }
+  document.body.classList.remove('bg-video');
+}
+function clearBgPhoto(){
+  document.body.classList.remove('bg-photo');
+  $('bgPhoto').style.backgroundImage = '';
+  $('bgPhotoBg').style.backgroundImage = '';
+  if (bgObjectUrl) { URL.revokeObjectURL(bgObjectUrl); bgObjectUrl = null; }
+}
+async function applyBg(mode, opts = {}){
+  try {
+    if (mode === 'builtin') { clearBgPhoto(); clearBgVideo(); }
+    else if (mode === 'wallpaper') {
+      // WE 壁纸：视频型直接流式播放（与电脑上各放各的互不影响）；scene/web 型上预览图。
+      // 带opts.id = 用户在网格里挑的那张（可与电脑上 WE 正在用的不同）；
+      // 不带 id = WE 当前生效的壁纸；WE 读不到再回退系统桌面壁纸。
+      // 探测用 GET + Range（只要 1 字节）：本机 websockets 16 的握手只认 GET，
+      // HEAD 会被直接断连，fetch 抛异常连状态码都拿不到。
+      const q = opts.id ? '?id=' + encodeURIComponent(opts.id) : '';
+      const probe = await fetch('/v1/wallpaper-engine/video' + q,
+        { cache: 'no-store', headers: { Range: 'bytes=0-0' } });
+      if (probe.ok) { setBgVideo(opts.id || 'current'); }
+      else {
+        let r = await fetch('/v1/wallpaper-engine' + q, { cache: 'no-store' });
+        if (!r.ok && !opts.id) {
+          $('bgInfo').textContent = 'Wallpaper 未读到，回退系统壁纸…';
+          r = await fetch('/v1/wallpaper', { cache: 'no-store' });
+        }
+        if (!r.ok) throw new Error('读取壁纸失败（' + r.status + '）——需在本机 Windows 上运行服务端');
+        setBgPhoto({ kind: 'blob', blob: await r.blob() });
+      }
+    } else if (mode === 'upload') {
+      const blob = opts.blob || await idbGet('bg');
+      if (!blob) { $('bgInfo').textContent = '先选一张本地图片'; return false; }
+      setBgPhoto({ kind: 'blob', blob });
+    } else if (mode === 'url') {
+      const u = opts.url !== undefined ? opts.url : (localStorage.getItem('paivoice_bg_url') || '');
+      if (!u) { $('bgInfo').textContent = '先填图片 URL'; return false; }
+      setBgPhoto({ kind: 'url', url: u });
+    }
+    localStorage.setItem(BG_KEY, JSON.stringify({ mode }));
+    bgChips(mode);
+    if (!opts.silent) $('bgInfo').textContent = mode === 'builtin' ? '已恢复内置背景 ✓' : '背景已更新 ✓';
+    return true;
+  } catch (e) { $('bgInfo').textContent = '⚠ ' + (e.message || e); return false; }
+}
+document.querySelectorAll('#bgModes .prof-item').forEach(b => b.onclick = async () => {
+  const mode = b.dataset.mode;
+  bgChips(mode);   // 选中态（金色填充）跟手：点了就换，不等背景应用结果
+  bgRows(mode);
+  await applyBg(mode);   // 有保存数据立即生效；没有则提示（upload/url 展开表单去填）
+});
+$('bgUrlApply').onclick = async () => {
+  const u = $('bgUrl').value.trim();
+  if (!u) { $('bgInfo').textContent = '⚠ 先填图片 URL'; return; }
+  localStorage.setItem('paivoice_bg_url', u);
+  await applyBg('url', { url: u });
+};
+$('bgUploadBtn').onclick = () => $('bgUpload').click();
+$('bgUpload').onchange = async () => {
+  const f = $('bgUpload').files[0]; if (!f) return;
+  if (!f.type.startsWith('image/')) { $('bgInfo').textContent = '⚠ 请选择图片文件'; return; }
+  try { await idbSet('bg', f); } catch (e) { $('bgInfo').textContent = '⚠ 本地保存失败（本次预览不受影响）'; }
+  await applyBg('upload', { blob: f });
+};
+$('bgBtn').onclick = () => {
+  $('modelPanel').classList.add('hidden'); $('voicePanel').classList.add('hidden'); $('personaPanel').classList.add('hidden');
+  $('bgPanel').classList.remove('hidden');
+};
+$('bgClose').onclick = () => $('bgPanel').classList.add('hidden');
+$('layOrbToggle').onclick = () => layToggle(ORB_KEY);
+$('laySubToggle').onclick = () => layToggle(SUB_KEY);
+$('layReset').onclick = () => { layReset(); $('bgInfo').textContent = '已恢复默认布局 ✓'; };
+
+// 启动时恢复上次选择的背景
+(async () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BG_KEY) || 'null');
+    if (!saved || saved.mode === 'builtin') return;
+    if (saved.mode === 'url') $('bgUrl').value = localStorage.getItem('paivoice_bg_url') || '';
+    if (saved.mode === 'wallpaper') {
+      // 上次挑过特定壁纸就恢复那张；否则拉 WE 当前生效的
+      const id = localStorage.getItem('paivoice_we_id');
+      if (await applyBg('wallpaper', id ? { id, silent: true } : { silent: true })) { bgChips('wallpaper'); bgRows('wallpaper'); }
+      return;
+    }
+    if (await applyBg(saved.mode, { silent: true })) { bgChips(saved.mode); bgRows(saved.mode); }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
