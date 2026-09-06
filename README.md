@@ -115,26 +115,8 @@ npm run electron:pack      # = PyInstaller 打 server.exe/local_voice.exe → el
 安装后第一次打开：设置面板里填你的网关（大脑）地址与模型（或保持默认空，用本地 Ollama）。
 云端 Key 只存 `%APPDATA%\PaiVoice\`，不回写 `.env`、不落入安装目录。
 
-## 4、部署（Zeabur）
-
-1. 新建 Zeabur 项目 → 部署本仓库（自动识别 Dockerfile）
-2. 环境变量（真 Key 只放这里，绝不入库）：
-
-| 变量 | 说明 |
-|---|---|
-| `PAIVOICE_TOKEN` | 浏览器拨号令牌（自定随机串，通话页里填同一个） |
-| `PAIVOICE_ASR_PROVIDER` | `siliconflow` |
-| `PAIVOICE_ASR_API_KEY` | 硅基流动 key |
-| `PAIVOICE_SILICONFLOW_ASR_MODEL` | `FunAudioLLM/SenseVoiceSmall` |
-| `PAIVOICE_TTS_PROVIDER` | `elevenlabs` |
-| `PAIVOICE_TTS_API_KEY` | ElevenLabs key |
-| `PAIVOICE_ELEVEN_VOICE_ID` | 音色 ID |
-| `PAIVOICE_GATEWAY_URL` | `https://<网关域名>/v1/chat/completions` |
-| `PAIVOICE_GATEWAY_TOKEN` | 网关 `API_SECRET` |
-| `PAIVOICE_ARCHIVE_URL` | `https://<网关域名>/v1/voice/archive` |
-
-3. 网关侧（另一仓库）需同步：`VOICE_LANE_ENABLED=1` + `VOICE_CALL_MODE_PROMPT`（电话模式措辞终版）
-4. 浏览器打开 `index.html`（静态托管或本地），填 `wss://<本服务域名>/voice/ws` + TOKEN → 接通
+## 4、打包
+`npm run electron:pack`
 
 ## 5、网关侧约定（联调契约）
 
