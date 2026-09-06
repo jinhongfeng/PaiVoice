@@ -1,0 +1,53 @@
+# PaiVoice Electron 打包配置
+# 位置必须在仓库根目录：electron-builder 只自动读取 projectDir 下的
+# electron-builder.yml（放 electron/ 子目录里不会被发现 → 图标/产物名全部走默认值）。
+# 隐私加固目标：安装包 / 程序目录 不含任何用户密钥与私人数据。
+#  - .env 被显式排除（files: !.env）——真 Key 只在首次启动由用户填写，存 %APPDATA%\PaiVoice
+#  - models/ 通过 extraResources 随包分发（local_voice.py 不会自动下载模型，
+#    不带模型的话离线 ASR/TTS 在新机器上直接不可用）
+# 用法：仓库根 `npm run electron:pack`（先 PyInstaller 出 dist/ 后端，再 electron-builder）
+
+appId: com.paivoice.desktop
+productName: PaiVoice
+directories:
+  output: release
+  buildResources: build
+
+# asar 关闭：后端 server.exe / local_voice.exe 是独立进程，前端静态页也要让
+# 外部 exe 直接读文件，asar 虚拟路径对外部进程不可见，关掉省去 unpack 对齐。
+asar: false
+
+files:
+  - "electron/main.js"
+  - "electron/preload.js"
+  - "dist/**"               # PyInstaller 产物（server.exe / local_voice.exe）
+  - "!dist/win-unpacked"    # 防：electron-builder 旧产物混进 dist 被二次打包
+  - "packages/web-client/**"
+  - "assets/icons/**"       # 前端 favicon / PWA 图标（server.py 启动时读入内存）
+  - "!**/.env"              # 隐私：绝不把密钥打进安装包
+  - "!**/*.log"
+
+extraResources:
+  - from: models            # → resources/models，main.js 会指给 local_voice.exe
+    to: models
+
+# Windows 目标：NSIS 安装器；因代码未签名，electron-builder 会在安装时提示「未知发布者」，
+# 属正常现象（本机自用可忽略）。正式分发需自行购买代码签名证书。
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # 图标路径相对仓库根（electron-builder 的 projectDir）
+  icon: assets/icons/paivoice-icon.ico
+  artifactName: "${productName}-${version}-setup.${ext}"
+
+nsis:
+  oneClick: false          # 显示安装向导（自用勾掉即可，行为更透明）
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: PaiVoice
+  installerIcon: assets/icons/paivoice-icon.ico
+  uninstallerIcon: assets/icons/paivoice-icon.ico
+
+npmRebuild: false
+nodeGypRebuild: false

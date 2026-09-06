@@ -1,0 +1,9 @@
+{
+  "pet_name": "你的昵称",
+  "his_name": "他的名字",
+  "tone": "default",
+  "style": "default",
+  "tone_free": "",
+  "style_free": "",
+  "system_prompt": null
+}

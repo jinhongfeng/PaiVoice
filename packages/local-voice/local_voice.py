@@ -42,8 +42,19 @@ if os.name == "nt" and not MODEL_DIR.isascii():
                 os.path.normpath(os.path.realpath(_link)) != os.path.normpath(MODEL_DIR):
             os.rmdir(_link)  # 旧 junction 指向别处，删掉重建
         if not os.path.isdir(_link):
-            subprocess.run(["cmd", "/c", "mklink", "/J", _link, MODEL_DIR],
-                           check=True, capture_output=True, creationflags=0x08000000)
+            try:
+                subprocess.run(["cmd", "/c", "mklink", "/J", _link, MODEL_DIR],
+                               check=True, capture_output=True, creationflags=0x08000000)
+            except Exception as e:
+                # 第一次失败常见原因：残留一个「空目录/坏 junction」挡在目标位置。
+                # 只删除目录本身（不递归），然后重试一次。
+                print(f"[local-voice] junction 创建失败（{e}），清理后重试", flush=True)
+                try:
+                    os.rmdir(_link)
+                except Exception:
+                    pass
+                subprocess.run(["cmd", "/c", "mklink", "/J", _link, MODEL_DIR],
+                               check=True, capture_output=True, creationflags=0x08000000)
         MODEL_DIR = _link
     except Exception as e:  # junction 不可用时退回原路径（ASCII 目录下本来就不需要）
         print(f"[local-voice] 模型目录 junction 创建失败（{e}），仍用原路径", flush=True)

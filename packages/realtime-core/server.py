@@ -64,9 +64,15 @@ LLM_MODEL = os.getenv("PAIVOICE_LLM_MODEL", "")   # 可在设置面板运行时�
 # 语音边车（local_voice.py）根地址：由 LOCAL_TTS_URL 推导
 SIDECAR_BASE = LOCAL_TTS_URL.rsplit("/v1/", 1)[0] if LOCAL_TTS_URL else "http://127.0.0.1:8792"
 
-# --- API 配置档案（设置面板多配置管理；持久化到 config/api_profiles.json，重启保留）---
-_prof_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config"))
-PROFILE_FILE = os.getenv("PAIVOICE_PROFILE_FILE", os.path.join(_prof_root, "api_profiles.json"))
+# --- API 配置档案 / 人设 存储根目录 ---
+# Electron 桌面版主进程把用户数据目录（%APPDATA%\PaiVoice）经 PAIVOICE_DATA_DIR 注入，
+# 档案类配置跟随同一目录，避免打包后仓库 config/ 不可写/重装丢配置。
+# 非桌面场景（无该 env）保留仓库 config/ 原行为。
+_config_root = os.getenv("PAIVOICE_DATA_DIR", "") or os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "config"))
+
+# --- API 配置档案（设置面板多配置管理；持久化到 <数据目录>/api_profiles.json，重启保留）---
+PROFILE_FILE = os.getenv("PAIVOICE_PROFILE_FILE", os.path.join(_config_root, "api_profiles.json"))
 
 
 def _load_profiles() -> dict:
@@ -89,8 +95,8 @@ def _save_profiles(profiles: dict) -> None:
 #   his_name   他的名字——让她有名字可喊（"我叫他xxx"）
 #   tone       聊天语气预设键（TONE_PRESETS）；"custom" 时用 tone_free
 #   style      聊天风格预设键（STYLE_PRESETS）；"custom" 时用 style_free
-# 自由文本与预设可叠加。持久化到 config/persona.json，设置面板热改，重启保留。
-PERSONA_FILE = os.getenv("PAIVOICE_PERSONA_FILE", os.path.join(_prof_root, "persona.json"))
+# 自由文本与预设可叠加。持久化到 <数据目录>/persona.json，设置面板热改，重启保留。
+PERSONA_FILE = os.getenv("PAIVOICE_PERSONA_FILE", os.path.join(_config_root, "persona.json"))
 TONE_PRESETS = {
     "default": "",
     "gentle":  "语气温柔体贴，轻声细语，像哄人入睡一样柔和。",
@@ -622,7 +628,11 @@ async def request_reply(http: aiohttp.ClientSession, turn: dict, metrics: dict |
             return await _call_gateway(http, turn, metrics, on_segment=on_segment)
 
     if not ADAPTER_URL:
-        return f"我听见了：{turn['transcript']}" if turn["transcript"] else "我没有听清楚。"
+        # 没接 AI 后端时只打印一次警告，不再硬编码 "我听见了：xxx" 之类的占位回话——
+        # 占位话会被前端渲染到聊天流里，对用户是噪声。空 reply 由 caller 直接 _finish_turn 收口。
+        print("[request_reply] AI 后端未配置（GATEWAY_URL/ADAPTER_URL 都为空），跳过回复。"
+              f"听到：{turn['transcript']!r}", flush=True)
+        return ""
     headers = {"content-type": "application/json"}
     if ADAPTER_TOKEN:
         headers["authorization"] = f"Bearer {ADAPTER_TOKEN}"
@@ -1822,23 +1832,35 @@ def _pet_file(slug: str, fname: str) -> tuple[bytes | None, str]:
 async def main() -> None:
     from pathlib import Path
 
+    # Electron 打包（PyInstaller onefile）：__file__ 在解压临时目录，找不到前端页面。
+    # 主进程把 PAIVOICE_WEB_ROOT 指到 <app>/packages/web-client，这里优先用。
+    _web_root = Path(os.environ["PAIVOICE_WEB_ROOT"]) if os.getenv("PAIVOICE_WEB_ROOT") else None
     index_paths = [Path(__file__).parent / "index.html",          # 容器：/app/index.html（Dockerfile COPY）
                    Path(__file__).parent.parent / "web-client" / "index.html"]  # 本地开发
+    if _web_root is not None:
+        index_paths = [_web_root / "index.html"] + index_paths
     index_text = next((p.read_text(encoding="utf-8") for p in index_paths if p.exists()),
                       "<h1>voice-call page missing</h1>")
     # 无登录页：把令牌注入前端占位符，页面打开即自动连接（地址由前端按 location 推导）
     index_text = index_text.replace("__PAIVOICE_TOKEN__", TOKEN)
     vc_paths = [Path(__file__).parent / "voice-call.js",
                 Path(__file__).parent.parent / "web-client" / "voice-call.js"]
+    if _web_root is not None:
+        vc_paths = [_web_root / "voice-call.js"] + vc_paths
     vc_text = next((p.read_text(encoding="utf-8") for p in vc_paths if p.exists()),
                    "export default {}")
     pet_controller_paths = [Path(__file__).parent / "pet-controller.js",
                             Path(__file__).parent.parent / "web-client" / "pet-controller.js"]
+    if _web_root is not None:
+        pet_controller_paths = [_web_root / "pet-controller.js"] + pet_controller_paths
     pet_controller_text = next((p.read_text(encoding="utf-8") for p in pet_controller_paths if p.exists()),
                                "export class PetController {}")
-    icon_dir = next((p for p in [Path(__file__).parent / "assets" / "icons",               # 容器：/app/assets/icons（Dockerfile COPY）
+    # Electron 打包态由主进程注入 PAIVOICE_ICON_DIR（PyInstaller 单文件找不到仓库 assets/）
+    _icon_env = os.getenv("PAIVOICE_ICON_DIR")
+    icon_dir = next((p for p in [Path(_icon_env) if _icon_env else None,
+                                 Path(__file__).parent / "assets" / "icons",               # 容器：/app/assets/icons（Dockerfile COPY）
                                  Path(__file__).parent.parent.parent / "assets" / "icons"]  # 本地开发：项目根 assets/icons
-                     if p.is_dir()), None)
+                     if p is not None and p.is_dir()), None)
     icon_files: dict[str, tuple[str, bytes]] = {}   # 图标路由 → (类型, 字节)；启动时读进内存，文件缺失就跳过
     for route, fname, ctype in [("/favicon.ico", "favicon.ico", "image/x-icon"),
                                 ("/icons/paivoice-icon-16.png", "paivoice-icon-16.png", "image/png"),

@@ -1,0 +1,18 @@
+{
+  "name": "paivoice-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PaiVoice 桌面端（Electron）：本地语音边车 + 通话后端 + 拨号页，打包为一键安装的 Windows 应用",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "py:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_backend.ps1",
+    "electron:dev": "electron .",
+    "electron:pack": "npm run py:build && electron-builder --win nsis",
+    "electron:dir": "npm run py:build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "43.3.0",
+    "electron-builder": "26.15.7"
+  }
+}

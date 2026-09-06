@@ -14,8 +14,9 @@
   :root{
     --bg1:#171008; --bg2:#2e2110; --bg3:#3d2c13;
     --gold:#f0c968; --gold-hi:#ffe9ad; --gold-dim:#a8873a; --gold-ink:#241a08;
-    --her:#8fe09a; --txt:#f7edd6; --sub:#c9b48a; --faint:#8a7d63;
+    --her:#8fe09a; --txt:#f7edd6; --sub:#d8c9a1; --faint:#a5997e;
     --glass:rgba(255,244,214,.055); --glass-bd:rgba(240,201,104,.16);
+    --danger:#e09686; --danger-hi:#f0b4a4;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
@@ -73,6 +74,8 @@
   #topbar{ display:flex; justify-content:center; padding:max(20px, env(safe-area-inset-top)) 16px 4px; }
   @media (max-width:560px){
     #topbar{ justify-content:flex-start; padding-left:16px; }
+    .state-pill{ padding:8px 14px; }
+    #state{ letter-spacing:3px; text-indent:3px; font-size:14px; }
   }
   .state-pill{ display:flex; align-items:center; gap:10px; padding:10px 22px; border-radius:999px;
     background:linear-gradient(180deg, rgba(48,36,16,.72), rgba(28,20,9,.72));
@@ -143,12 +146,19 @@
   #pet .p-svg{ width:100%; height:100%; overflow:visible; display:block; }
   #pet.flip .p-svg{ transform:scaleX(-1); }             /* 朝向：往左走就调头 */
   #pet.roaming{ position:fixed; left:0; top:0; margin:0; z-index:14; will-change:transform; }
-  #petModes, #petKinds, #petMoods{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
-  .pet-kind-installed{ display:inline-flex; align-items:stretch; }
-  .pet-kind-installed .prof-item{ border-radius:999px 0 0 999px; }
-  .pet-kind-remove{ padding:0 10px; border:1px solid rgba(224,128,110,.28); border-left:0;
-    border-radius:0 999px 999px 0; cursor:pointer; background:rgba(92,37,28,.45); color:#e8b0a0; }
-  .pet-kind-remove:hover{ background:rgba(130,45,32,.65); color:#ffd6ca; }
+  #petKinds, #petMoods{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
+  /* 已安装 Codex 宠物：独立行式列表，删除按钮固定在每项右侧 */
+  #petInstalled{ display:flex; flex-wrap:wrap; gap:7px; }
+  .pet-installed-row{ display:inline-flex; align-items:center; border-radius:999px; overflow:hidden;
+    border:1px solid rgba(240,201,104,.16); background:rgba(34,25,11,.55); }
+  .pet-installed-row.on{ background:rgba(240,201,104,.16); border-color:rgba(240,201,104,.7); }
+  .pet-installed-row button{ border:none; background:transparent; cursor:pointer; font-size:12px; transition:background .18s, color .18s; }
+  .pet-installed-row .pet-pick{ padding:7px 6px 7px 13px; color:#cfc19c; }
+  .pet-installed-row .pet-pick:hover{ color:var(--gold-hi); }
+  .pet-installed-row.on .pet-pick{ color:var(--gold-hi); font-weight:700; }
+  .pet-installed-row.on .pet-pick::before{ content:"✓ "; }
+  .pet-installed-row .pet-remove{ padding:7px 12px; border-left:1px solid rgba(224,128,110,.22); color:var(--danger); }
+  .pet-installed-row .pet-remove:hover{ background:rgba(130,45,32,.6); color:var(--danger-hi); }
 
   /* 部件枢轴：耳朵从根部扇、手脚从上端摆、尾巴从根部摇、整体动作以脚底为轴 */
   #pet .p-part, #pet .p-all, #pet .p-head, #pet .p-eye, #pet .p-eye-g,
@@ -285,12 +295,12 @@
   #pet.sprite-pet.dragging{ cursor:grabbing; }
 
   /* ---------- 字幕：聊天气泡（可拖动 / 双击隐藏） ---------- */
-  #sub{ flex:0 1 auto; width:min(640px, 100%); margin:0 auto; max-height:34vh; overflow-y:auto; padding:6px 18px 10px;
+  #sub{ flex:0 1 auto; width:min(680px, 100%); margin:0 auto; max-height:34vh; overflow-y:auto; padding:6px 18px 10px;
     display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth;
     touch-action:none;
     -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 26px);
     mask-image:linear-gradient(180deg, transparent 0, #000 26px); }
-  #sub.float-drag{ position:fixed; z-index:12; flex:none; width:min(640px, 92vw); max-height:44vh; margin:0;
+  #sub.float-drag{ position:fixed; z-index:12; flex:none; width:min(680px, 92vw); max-height:44vh; margin:0;
     background:linear-gradient(170deg, rgba(32,23,10,.62), rgba(16,11,4,.62));
     border:1px solid rgba(240,201,104,.15); border-radius:24px;
     box-shadow:0 14px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,235,180,.08);
@@ -335,7 +345,10 @@
   #typedSend:hover{ transform:translateY(-1px); box-shadow:0 6px 18px rgba(195,156,64,.45), inset 0 1px 0 rgba(255,255,255,.5); }
   #typedSend:active{ transform:scale(.92); }
   #typedSend svg{ width:18px; height:18px; }
-  #ctrl{ display:flex; justify-content:center; align-items:center; gap:46px; padding:0 0 max(26px, env(safe-area-inset-bottom)); }
+  /* 开麦 / 挂断按键整体下沉（输入框 #textrow 不动）：底部内边距 26px → 44px，按钮往下压一截 */
+  #ctrl{ display:flex; justify-content:center; align-items:center; gap:46px; padding:0 0 max(44px, env(safe-area-inset-bottom)); }
+  /* 拖走按键（position:fixed 脱离文档流）后 #ctrl 会塌掉：保底行高，输入行才不会跟着跳（桌面/手机都生效） */
+  #ctrl:not(:has(.btn:not(.float-free))){ min-height:calc(68px + max(44px, env(safe-area-inset-bottom))); }
   .btn{ width:68px; height:68px; border-radius:50%; border:none; display:flex;
         align-items:center; justify-content:center; cursor:pointer; position:relative;
         touch-action:none; transition:transform .15s, box-shadow .25s, background .25s; }
@@ -344,13 +357,10 @@
   /* 按键自由布局：拖离默认位后浮起，固定在屏幕坐标（同圆盘/聊天） */
   .btn.float-free{ position:fixed; z-index:13; margin:0; cursor:grab; }
   .btn.float-free.dragging{ transform:none; cursor:grabbing; }
-  /* 打字条自由布局：拖离默认槽后浮起，带同款卡片壳；输入框上也能起步拖动 */
+  /* 打字条自由布局：拖离默认槽后浮起为固定定位浮层；外观保持原样（不加卡片壳，
+     输入框在默认位和浮起位长得一模一样），6px 透明内边距只是放宽抓握范围 */
   #textrow{ touch-action:none; }
-  #textrow.float-free{ position:fixed; z-index:13; margin:0; padding:6px; width:min(560px,92vw); cursor:grab;
-    background:linear-gradient(170deg, rgba(32,23,10,.62), rgba(16,11,4,.62));
-    border:1px solid rgba(240,201,104,.15); border-radius:24px;
-    box-shadow:0 14px 44px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,235,180,.08);
-    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  #textrow.float-free{ position:fixed; z-index:13; margin:0; padding:6px; width:min(560px,92vw); cursor:grab; }
   #textrow.float-free.dragging{ cursor:grabbing; }
   #mute{ background:linear-gradient(180deg, rgba(84,70,48,.9), rgba(52,42,26,.9));
     color:#f2e5c4; border:1px solid rgba(240,201,104,.22);
@@ -375,80 +385,138 @@
   #hang.idle .ico-start{ display:block; }
   body[data-state="dialing"] .state-pill .dot{ background:var(--gold); box-shadow:0 0 12px rgba(240,201,104,.8); animation-duration:.9s; }
 
-  /* ---------- 右上角入口 ---------- */
-  #cfgBtnsTop{ position:fixed; top:14px; right:14px; display:flex; gap:8px; }
-  #cfgBtnsTop button{ padding:9px 16px; border-radius:999px; border:1px solid var(--glass-bd); cursor:pointer;
-    font-size:12.5px; letter-spacing:3px; text-indent:3px; font-weight:600; color:var(--gold-hi);
-    background:linear-gradient(180deg, rgba(58,43,18,.85), rgba(32,23,10,.85));
-    box-shadow:0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,235,180,.12);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:transform .15s, box-shadow .2s, border-color .2s; }
-  #cfgBtnsTop button:hover{ border-color:rgba(240,201,104,.5); box-shadow:0 6px 20px rgba(0,0,0,.4), 0 0 16px rgba(240,201,104,.15); }
+  /* ---------- 右上角设置工具条：统一半透明工具条，当前打开项淡金高亮 ---------- */
+  #cfgBtnsTop{ position:fixed; top:14px; right:14px; display:flex; gap:2px; padding:5px; z-index:15;
+    border-radius:16px; border:1px solid var(--glass-bd);
+    background:linear-gradient(180deg, rgba(42,31,14,.78), rgba(24,17,7,.78));
+    box-shadow:0 8px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,235,180,.06);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+  #cfgBtnsTop button{ display:flex; align-items:center; gap:6px; padding:8px 11px; border:none; border-radius:10px; cursor:pointer;
+    font-size:12.5px; letter-spacing:.5px; font-weight:600; color:var(--sub);
+    background:transparent; transition:background .18s, color .18s, transform .12s; }
+  #cfgBtnsTop button svg{ width:15px; height:15px; flex:none; opacity:.85; }
+  #cfgBtnsTop button:hover{ background:rgba(255,244,214,.07); color:var(--gold-hi); }
   #cfgBtnsTop button:active{ transform:scale(.94); }
+  #cfgBtnsTop button.open{ background:rgba(240,201,104,.15); color:var(--gold-hi); }
+  #cfgBtnsTop button.open svg{ opacity:1; }
+  /* 平板/手机：收缩为纯图标按钮，避免与中央状态胶囊抢位 */
+  @media (max-width:920px){
+    #cfgBtnsTop button .t-label{ display:none; }
+    #cfgBtnsTop button{ padding:8px 9px; }
+  }
+  @media (max-width:560px){
+    #cfgBtnsTop{ top:12px; right:12px; padding:4px; gap:2px; }
+  }
 
-  /* ---------- 配置面板 ---------- */
+  /* ---------- 配置面板：统一三段式骨架（标题栏固定 / 内容可滚动 / 底部操作固定） ---------- */
   .cfgPanel{ position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
-    background:rgba(10,6,2,.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-    animation:fadein .22s ease-out; }
+    background:rgba(10,6,2,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    animation:fadein .18s ease-out; }
   @keyframes fadein{ from{ opacity:0; } to{ opacity:1; } }
-  .cfgCard{ width:min(92vw,470px); max-height:86vh; overflow:auto; padding:24px 24px 20px; color:var(--txt);
-    background:linear-gradient(170deg, rgba(38,28,13,.96), rgba(22,16,7,.96));
-    border:1px solid rgba(240,201,104,.22); border-radius:22px;
-    box-shadow:0 24px 70px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,235,180,.1);
-    animation:cardup .28s cubic-bezier(.2,.9,.3,1.2); }
-  @keyframes cardup{ from{ opacity:0; transform:translateY(22px) scale(.97);} to{ opacity:1; transform:none;} }
+  .cfgCard{ width:min(92vw,560px); max-height:min(760px, calc(100vh - 48px)); display:flex; flex-direction:column;
+    color:var(--txt); overflow:hidden; position:relative;
+    background:linear-gradient(175deg, rgba(34,25,12,.97), rgba(20,14,6,.97));
+    border:1px solid rgba(240,201,104,.20); border-radius:16px;
+    box-shadow:0 20px 60px rgba(0,0,0,.55);
+    animation:cardup .18s ease-out; }
+  /* 加宽版卡片：模型 / 人设 / 背景 / 宠物 弹窗使用（与音色弹窗同高同构，宽度统一 720） */
+  .cfgCard.wide{ width:min(94vw,720px); }
+  @keyframes cardup{ from{ opacity:0; transform:translateY(14px) scale(.985);} to{ opacity:1; transform:none;} }
+  .cfgCard .cfg-head{ position:relative; flex:none; padding:18px 56px 12px 24px; }
+  .cfgCard .cfg-body{ flex:1; min-height:0; overflow-y:auto; padding:4px 24px 8px; }
+  .cfgCard .cfg-foot{ flex:none; display:flex; align-items:center; gap:10px; padding:14px 24px 16px;
+    border-top:1px solid rgba(240,201,104,.12); background:rgba(12,8,3,.4); }
+  .cfgCard .cfg-foot .foot-info{ flex:1; min-width:0; font-size:11px; line-height:1.6; color:var(--sub); word-break:break-all; }
+  .cfgCard .cfg-foot .foot-spacer{ flex:1; }
+  .cfgCard .cfg-close-x{ position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:9px; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; background:transparent; color:var(--faint);
+    transition:background .18s, color .18s; z-index:6; }
+  .cfgCard .cfg-close-x:hover{ background:rgba(255,244,214,.08); color:var(--txt); }
+  .cfgCard .cfg-close-x svg{ width:16px; height:16px; }
   .cfgCard::-webkit-scrollbar{ width:5px; } .cfgCard::-webkit-scrollbar-thumb{ background:rgba(240,201,104,.25); border-radius:3px; }
-  .cfgCard h3{ color:var(--gold-hi); letter-spacing:6px; text-indent:6px; margin:0 0 4px; text-align:center; font-size:17px; }
-  .cfgCard .h3-sub{ text-align:center; font-size:11px; color:var(--faint); letter-spacing:2px; margin-bottom:14px; }
-  .cfgCard label{ display:block; margin:14px 0 6px; font-size:11.5px; color:#bfae8a; letter-spacing:1.5px; }
-  .cfgCard select, .cfgCard input, .cfgCard textarea{ width:100%; box-sizing:border-box; padding:11px 13px; border-radius:12px;
-    border:1px solid rgba(240,201,104,.18); background:rgba(20,14,6,.8); color:var(--txt); font-size:14px; outline:none;
-    transition:border-color .2s, box-shadow .2s; }
+  .cfgCard .cfg-body::-webkit-scrollbar{ width:5px; } .cfgCard .cfg-body::-webkit-scrollbar-thumb{ background:rgba(240,201,104,.25); border-radius:3px; }
+  .cfgCard h3{ color:var(--gold-hi); letter-spacing:1px; margin:0 0 4px; text-align:center; font-size:18px; font-weight:600; }
+  .cfgCard .h3-sub{ text-align:center; font-size:12px; color:var(--faint); letter-spacing:.5px; margin-bottom:2px; }
+  .cfgCard label{ display:block; margin:16px 0 6px; font-size:13px; font-weight:500; color:var(--sub); letter-spacing:.5px; }
+  .cfgCard select, .cfgCard input, .cfgCard textarea{ width:100%; box-sizing:border-box; padding:11px 13px; border-radius:10px;
+    border:1px solid rgba(240,201,104,.18); background:rgba(16,11,5,.85); color:var(--txt); font-size:14px; outline:none;
+    transition:border-color .18s, box-shadow .18s; }
   .cfgCard select:focus, .cfgCard input:focus, .cfgCard textarea:focus{
-    border-color:rgba(240,201,104,.55); box-shadow:0 0 0 3px rgba(240,201,104,.1); }
+    border-color:rgba(240,201,104,.55); box-shadow:0 0 0 3px rgba(240,201,104,.10); }
   .cfgCard textarea{ resize:vertical; font-family:inherit; min-height:88px; line-height:1.6; }
-  #cfgInfo, #voiceInfo{ margin-top:12px; font-size:11px; color:var(--faint); line-height:1.7; word-break:break-all; }
+  .cfgCard .foot-info, #cfgInfo, #voiceInfo, #psInfo{ font-size:11px; line-height:1.7; color:var(--sub); word-break:break-all; }
   #cfgProfiles{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
-  .prof-item{ padding:7px 13px; border-radius:999px; border:1px solid rgba(240,201,104,.22); background:rgba(34,25,11,.8);
-    color:#d5c7a2; cursor:pointer; font-size:12px; transition:all .18s; }
-  .prof-item:hover{ border-color:rgba(240,201,104,.6); color:var(--gold-hi); transform:translateY(-1px); }
-  .prof-item.on{ background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink); font-weight:700; border-color:transparent;
-    box-shadow:0 4px 14px rgba(195,156,64,.35); }
+  .prof-item{ padding:7px 13px; border-radius:999px; border:1px solid rgba(240,201,104,.16); background:rgba(34,25,11,.55);
+    color:#cfc19c; cursor:pointer; font-size:12px; transition:all .18s; }
+  .prof-item:hover{ border-color:rgba(240,201,104,.5); color:var(--gold-hi); }
+  .prof-item.on{ background:rgba(240,201,104,.16); color:var(--gold-hi); font-weight:700;
+    border-color:rgba(240,201,104,.7); box-shadow:0 0 0 1px rgba(240,201,104,.35) inset; }
+  .prof-item.on::before{ content:"✓ "; }
+  .prof-item-group{ display:inline-flex; align-items:stretch; }
+  .prof-item-group .prof-item{ border-radius:999px 0 0 999px; }
+  .prof-item-group .prof-remove{ padding:0 11px; border:1px solid rgba(224,128,110,.25); border-left:0;
+    border-radius:0 999px 999px 0; cursor:pointer; background:rgba(92,37,28,.4); color:var(--danger); font-size:12px; }
+  .prof-item-group .prof-remove:hover{ background:rgba(130,45,32,.6); color:var(--danger-hi); }
   #cfgTestResult{ margin-top:10px; font-size:11.5px; line-height:1.7; word-break:break-all; white-space:pre-wrap;
-    color:#c9bd9c; background:rgba(20,14,6,.5); border:1px dashed rgba(240,201,104,.18); border-radius:12px; padding:9px 12px; }
+    color:#d0c49f; background:rgba(16,11,5,.5); border:1px solid rgba(240,201,104,.14); border-radius:10px; padding:9px 12px; }
   #cfgTestResult:empty{ display:none; }
-  .cfgBtns{ display:flex; gap:10px; margin-top:16px; }
-  .cfgBtns button{ flex:1; padding:12px; border-radius:12px; border:none; cursor:pointer; font-size:14px; letter-spacing:3px; text-indent:3px;
+  .cfgBtns{ display:flex; gap:10px; margin-top:14px; }
+  .cfgBtns button{ flex:1; padding:11px; border-radius:10px; border:none; cursor:pointer; font-size:13.5px; letter-spacing:.5px;
     transition:transform .15s, box-shadow .2s, filter .2s; }
   .cfgBtns button:hover{ filter:brightness(1.08); }
-  .cfgBtns button:active{ transform:scale(.96); }
+  .cfgBtns button:active{ transform:scale(.97); }
   .btn-gold{ background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink); font-weight:700;
-    box-shadow:0 6px 18px rgba(195,156,64,.3), inset 0 1px 0 rgba(255,255,255,.5); }
-  .btn-dim{ background:rgba(48,38,20,.7); color:#bfae8a; border:1px solid rgba(240,201,104,.14) !important; }
-  #cfgPTest{ width:100%; margin-top:12px; padding:11px; border-radius:12px; border:1px solid rgba(240,201,104,.25);
-    background:rgba(52,40,18,.8); color:var(--gold-hi); cursor:pointer; letter-spacing:4px; text-indent:4px;
-    font-size:13px; font-weight:600; transition:all .2s; }
-  #cfgPTest:hover:not(:disabled){ border-color:rgba(240,201,104,.6); background:rgba(70,54,24,.9); }
+    border-radius:10px; box-shadow:0 4px 14px rgba(195,156,64,.28), inset 0 1px 0 rgba(255,255,255,.5); }
+  .btn-dim{ background:rgba(48,38,20,.6); color:#d8c9a1; border:1px solid rgba(240,201,104,.14) !important; border-radius:10px; }
+  .btn-danger{ background:rgba(92,37,28,.5); color:var(--danger); border:1px solid rgba(224,128,110,.22) !important; border-radius:10px; }
+  .btn-danger:hover{ background:rgba(130,45,32,.6); color:var(--danger-hi); filter:none !important; }
+  /* 弹窗分条：低对比实线分隔 + 无发光的节标题 */
+  .sec{ margin-top:16px; padding-top:14px; border-top:1px solid rgba(240,201,104,.12); }
+  .sec:first-child{ margin-top:0; padding-top:0; border-top:none; }
+  .sec-title{ margin:0 0 4px; font-size:14px; font-weight:600; color:var(--gold-hi); letter-spacing:.5px; }
+  .sec-desc{ margin:0 0 2px; font-size:12px; color:var(--faint); letter-spacing:.5px; line-height:1.6; }
+  .form-row{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  .form-row .span2{ grid-column:1 / -1; }
+  @media (max-width:600px){ .form-row{ grid-template-columns:1fr; } }
+  #cfgPTest{ width:100%; margin-top:12px; padding:10px; border-radius:10px; border:1px solid rgba(240,201,104,.22);
+    background:rgba(52,40,18,.7); color:var(--gold-hi); cursor:pointer; letter-spacing:1px; text-indent:1px;
+    font-size:13px; font-weight:600; transition:all .18s; }
+  #cfgPTest:hover:not(:disabled){ border-color:rgba(240,201,104,.55); background:rgba(70,54,24,.85); }
   #cfgPTest:disabled{ opacity:.55; cursor:wait; }
+  /* 弹窗加载遮罩：打开/切换配置时显示，覆盖在卡片内容之上 */
+  .cfgPanel .cfg-loading{ position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:14px; border-radius:inherit;
+    background:linear-gradient(175deg, rgba(34,25,12,.86), rgba(20,14,6,.9));
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+  .cfgPanel .cfg-loading.hidden{ display:none; }
+  .cfg-loading .spin-ring{ width:38px; height:38px; border-radius:50%;
+    border:3px solid rgba(240,201,104,.22); border-top-color:var(--gold);
+    animation:spin 1s linear infinite; box-shadow:0 0 14px rgba(240,201,104,.25); }
+  .cfg-loading .loading-txt{ font-size:12.5px; letter-spacing:2px; text-indent:2px; color:var(--gold-hi);
+    text-shadow:0 0 12px rgba(240,201,104,.4); animation:dotpulse 1.6s ease-out infinite; }
   /* 背景设置面板 */
   #bgModes{ display:flex; flex-wrap:wrap; gap:7px; }
   .bg-urlrow{ display:flex; gap:8px; }
   .bg-urlrow input{ flex:1; }
-  #bgUrlApply{ flex:none; padding:0 22px; border:none; border-radius:12px; cursor:pointer; font-size:14px; }
-  #bgUploadBtn{ width:100%; padding:12px; border-radius:12px; border:1px dashed rgba(240,201,104,.35);
-    background:rgba(34,25,11,.6); color:var(--gold-hi); cursor:pointer; font-size:13px; letter-spacing:2px; transition:all .2s; }
+  #bgUrlApply{ flex:none; padding:0 22px; border:none; border-radius:10px; cursor:pointer; font-size:14px; }
+  #bgUploadBtn{ width:100%; padding:12px; border-radius:10px; border:1px dashed rgba(240,201,104,.32);
+    background:rgba(34,25,11,.55); color:var(--gold-hi); cursor:pointer; font-size:13px; letter-spacing:1px; transition:all .18s; }
   #bgUploadBtn:hover{ border-color:rgba(240,201,104,.7); background:rgba(52,40,18,.8); }
   .bg-tip{ font-size:11px; color:var(--faint); margin-top:8px; line-height:1.6; }
   /* Wallpaper 壁纸挑选网格：缩略图铺满卡片，选中亮金描边 */
-  #weGrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr));
-    gap:8px; max-height:300px; overflow-y:auto; padding:2px; margin-top:8px; }
-  .we-item{ position:relative; border:2px solid transparent; border-radius:12px; padding:0;
+  #weGrid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr));
+    gap:10px; max-height:300px; overflow-y:auto; padding:2px; margin-top:10px; }
+  .we-item{ position:relative; border:2px solid transparent; border-radius:10px; padding:0;
     background:none; cursor:pointer; overflow:hidden; aspect-ratio:1/1; transition:border-color .15s, transform .15s; }
   .we-item img{ width:100%; height:100%; object-fit:cover; display:block; }
   .we-item .we-t{ position:absolute; left:0; right:0; bottom:0; padding:10px 6px 4px; font-size:10px; line-height:1.3;
     color:#fff; text-align:center; background:linear-gradient(transparent, rgba(0,0,0,.78));
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .we-item:hover{ transform:scale(1.03); }
-  .we-item.on{ border-color:var(--gold); box-shadow:0 0 12px rgba(240,201,104,.45); }
+  .we-item.on{ border-color:var(--gold); box-shadow:0 0 0 1px rgba(240,201,104,.45); }
+  .we-item.on::after{ content:"✓"; position:absolute; top:6px; right:6px; width:18px; height:18px; border-radius:50%;
+    background:linear-gradient(180deg,#f6dd94,#c39c40); color:var(--gold-ink); font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.4); }
   .we-item.noprev{ display:flex; align-items:center; justify-content:center;
     background:rgba(34,25,11,.6); color:var(--faint); font-size:10px; padding:6px; text-align:center; }
   .hidden{ display:none !important; }
@@ -458,7 +526,7 @@
   /* ---------- 桌面大屏：左舞台右对话 双栏布局 ---------- */
   @media (min-width:920px){
     main{ display:grid; width:100%; max-width:1560px; margin:0 auto;
-      grid-template-columns: 1fr clamp(340px, 32vw, 440px);
+      grid-template-columns: 1fr clamp(380px, 36vw, 520px);
       grid-template-rows: auto 1fr auto auto;
       grid-template-areas: "top top" "stage chat" "input input" "ctrl ctrl";
       column-gap: clamp(24px, 3vw, 48px);
@@ -468,7 +536,7 @@
     #stage{ grid-area: stage; }
     #disc, .ring, #pet{ width:min(34vw, 348px); }
     .orbit{ width:min(44vw, 452px); }
-    #ctrl{ grid-area: ctrl; gap:56px; padding-bottom:max(26px, env(safe-area-inset-bottom)); }
+    #ctrl{ grid-area: ctrl; gap:56px; padding-bottom:max(44px, env(safe-area-inset-bottom)); }
     .btn.float-free{ z-index:14; }
     #textrow{ grid-area: input; padding-bottom:14px; }
     #sub:not(.float-drag){ grid-area: chat; width:auto; max-height:none; align-self:stretch; min-height:0;
@@ -507,8 +575,6 @@
       </div>
       <!-- 桌宠：纯 SVG 小动物（JS 注入手绘画稿），点它开心、拖它挪窝 -->
       <div id="pet" data-kind="cat" data-mood="idle" aria-hidden="true"></div>
-</svg>
-      </div>
     </div>
     <div id="sub"></div>
     <div id="textrow" class="hidden">
@@ -532,159 +598,272 @@
   </main>
 
   <div id="cfgBtnsTop">
-    <button id="modelBtn" title="模型 / API 配置">模型</button>
-    <button id="voiceBtn" title="音色 / 说话人配置">音色</button>
-    <button id="personaBtn" title="称呼 / 聊天语气 / 聊天风格">人设</button>
-    <button id="bgBtn" title="背景设置">背景</button>
-    <button id="petBtn" title="桌宠 / 圆盘切换，还能让它自己溜达">宠物</button>
+    <button id="modelBtn" title="模型 / API 配置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6"/></svg>
+      <span class="t-label">模型</span>
+    </button>
+    <button id="voiceBtn" title="音色 / 说话人配置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+      <span class="t-label">音色</span>
+    </button>
+    <button id="personaBtn" title="称呼 / 聊天语气 / 聊天风格">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+      <span class="t-label">人设</span>
+    </button>
+    <button id="bgBtn" title="背景设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15l4.5-4.5L11 14l4-4 6 6"/></svg>
+      <span class="t-label">背景</span>
+    </button>
+    <button id="petBtn" title="桌宠 / 圆盘切换，还能让它自己溜达">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2.2"/><circle cx="15" cy="9" r="2.2"/><path d="M12 4c-3.2 0-5.6 2-5.6 4.6 0 1.2.5 2.2 1.2 3-.4 2-1.5 4.9-3.8 6.4 2.6.6 4.6-.3 5.9-1.9.8.3 1.6.4 2.3.4s1.5-.1 2.3-.4c1.3 1.6 3.3 2.5 5.9 1.9-2.3-1.5-3.4-4.4-3.8-6.4.7-.8 1.2-1.8 1.2-3C17.6 6 15.2 4 12 4z"/></svg>
+      <span class="t-label">宠物</span>
+    </button>
   </div>
 
   <div id="petPanel" class="cfgPanel hidden">
-    <div class="cfgCard">
-      <h3>桌宠设置</h3>
-      <div class="h3-sub">PET · 圆盘换只小伙伴陪你打电话</div>
-      <label>舞台显示</label>
-      <div id="petModes">
-        <button type="button" class="prof-item" data-mode="orb">金色圆盘</button>
-        <button type="button" class="prof-item" data-mode="pet">桌宠</button>
+    <div class="cfgCard wide">
+      <div class="cfg-head">
+        <h3>桌宠设置</h3>
+        <div class="h3-sub">形态即舞台：选 🥇 金盘是圆盘，选动物是桌宠</div>
+        <button class="cfg-close-x" id="petCloseX" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
-      <label>宠物形态</label>
-      <div id="petKinds"></div>
-      <label>安装 Codex 宠物（填写宠物 id 或粘贴 npm 安装命令）</label>
-      <div style="display:flex; gap:8px;">
-        <input id="petInstallId" placeholder="npx codex-pet-installer add kitagawa-marin" autocomplete="off"
-               style="flex:1; padding:10px 13px; border-radius:12px; border:1px solid rgba(240,201,104,.18);
-                      background:rgba(20,14,6,.8); color:var(--txt); font-size:13.5px; outline:none;">
-        <button id="petInstallGo" class="btn-gold" style="padding:10px 16px; border-radius:12px; border:none;
-                cursor:pointer; font-weight:700; letter-spacing:2px;">安 装</button>
+      <div class="cfg-body">
+        <div class="sec">
+          <p class="sec-title">宠物形态</p>
+          <p class="sec-desc">选一个形态陪你打电话，切换即生效</p>
+          <div id="petKinds"></div>
+          <div id="petInstalledWrap" class="hidden" style="margin-top:10px">
+            <p class="sec-desc" style="margin-bottom:6px">已安装的 Codex 宠物</p>
+            <div id="petInstalled"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <p class="sec-title">安装 Codex 宠物</p>
+          <p class="sec-desc">填写宠物 id 或粘贴 npm 安装命令</p>
+          <div style="display:flex; gap:8px;">
+            <input id="petInstallId" placeholder="npx codex-pet-installer add kitagawa-marin" autocomplete="off"
+                   style="flex:1; padding:10px 13px; border-radius:10px; border:1px solid rgba(240,201,104,.18);
+                          background:rgba(16,11,5,.85); color:var(--txt); font-size:13.5px; outline:none;">
+            <button id="petInstallGo" class="btn-gold" style="padding:10px 16px; border-radius:10px; border:none;
+                    cursor:pointer; font-weight:700; letter-spacing:1px;">安 装</button>
+          </div>
+          <p class="sec-desc" style="margin-top:10px">codex 宠物库 <a href="https://codex-pet.org/zh/" target="_blank" rel="noopener" style="color:var(--gold-hi)">https://codex-pet.org/zh/</a></p>
+        </div>
+        <div class="sec">
+          <p class="sec-title">动作与溜达</p>
+          <p class="sec-desc">选一个立刻表演；溜达开着时它过会儿还会自己出来遛弯</p>
+          <div id="petMoods"></div>
+          <div id="petRoamRow" class="cfgBtns" style="margin-top:12px">
+            <button id="petRoamToggle" class="btn-dim">关闭溜达</button>
+            <button id="petRoamNow" class="btn-dim">现在就溜一圈</button>
+          </div>
+          <div class="bg-tip">直接拖动宠物可以给它挪窝，位置会记住；双击舞台 / 聊天区依旧能隐藏或显示。点击它一下会开心地蹦起来。Codex 宠物的动作对照：待机=待机、出门溜达=奔跑、开心跳跳=跳跃、睡觉=打盹等待；她说话时它会切换到挥手/欢脱帧。</div>
+        </div>
       </div>
-      <div class="cfgBtns" style="margin-top:8px">
-        <button id="petInstallMax" class="btn-dim">🐕 一键装 Max 边牧（官方推荐）</button>
-      </div>
-      <label>动作（选一个立刻表演；溜达开着时它过会儿还会自己出来遛弯）</label>
-      <div id="petMoods"></div>
-      <label>自动溜达</label>
-      <div id="petRoamRow" class="cfgBtns" style="margin-top:2px">
-        <button id="petRoamToggle" class="btn-dim">关闭溜达</button>
-        <button id="petRoamNow" class="btn-dim">现在就溜一圈</button>
-      </div>
-      <div class="bg-tip">直接拖动宠物可以给它挪窝，位置会记住；双击舞台 / 聊天区依旧能隐藏或显示。点击它一下会开心地蹦起来。Codex 宠物的动作对照：待机=待机、出门溜达=奔跑、开心跳跳=跳跃、睡觉=打盹等待；她说话时它会切换到挥手/欢脱帧。</div>
-      <div id="petInfo"></div>
-      <div class="cfgBtns">
-        <button id="petClose" class="btn-dim">关 闭</button>
+      <div class="cfg-foot">
+        <div class="foot-info" id="petInfo"></div>
+        <div class="foot-spacer"></div>
+        <button id="petClose" class="btn-dim" style="flex:0 0 auto; padding:10px 22px;">关 闭</button>
       </div>
     </div>
   </div>
 
   <div id="personaPanel" class="cfgPanel hidden">
-    <div class="cfgCard">
-      <h3>人设定制</h3>
-      <div class="h3-sub">PERSONA · 怎么称呼、用什么腔调聊天</div>
-      <label>怎么称呼你（他的每一句回复都会叫你这个昵称）</label>
-      <input id="psPetName" placeholder="如：小宝 / 老婆大人 / 猪猪" maxlength="20" autocomplete="off">
-      <label>他叫什么（你想让他自称 / 你喊他的名字）</label>
-      <input id="psHisName" placeholder="如：阿杰 / 顾川，留空则不指定" maxlength="20" autocomplete="off">
-      <label>聊天语气（点选一个，或选「自定义」自己写）</label>
-      <div id="psTones"></div>
-      <textarea id="psToneFree" rows="2" class="hidden" placeholder="用一句话描述想要的语气，如：像小猫一样软软的，爱撒娇…"></textarea>
-      <label>聊天风格（点选一个，或选「自定义」自己写）</label>
-      <div id="psStyles"></div>
-      <textarea id="psStyleFree" rows="2" class="hidden" placeholder="用一句话描述想要的风格，如：每天变着花样给我讲睡前小故事…"></textarea>
-      <div id="psInfo"></div>
-      <div class="cfgBtns">
-        <button id="psSave" class="btn-gold">保存人设</button>
-        <button id="psClose" class="btn-dim">关 闭</button>
+    <div class="cfgCard wide">
+      <div class="cfg-loading hidden"><div class="spin-ring"></div><div class="loading-txt">加载中…</div></div>
+      <div class="cfg-head">
+        <h3>人设定制</h3>
+        <div class="h3-sub">怎么称呼、用什么腔调聊天</div>
+        <button class="cfg-close-x" id="psCloseX" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="cfg-body">
+        <div class="sec">
+          <p class="sec-title">称呼</p>
+          <div class="form-row">
+            <div>
+              <label>怎么称呼你（他的每一句回复都会叫你这个昵称）</label>
+              <input id="psPetName" placeholder="如：小宝 / 老婆大人 / 猪猪" maxlength="20" autocomplete="off">
+            </div>
+            <div>
+              <label>他叫什么（你想让他自称 / 你喊他的名字）</label>
+              <input id="psHisName" placeholder="如：阿杰 / 顾川，留空则不指定" maxlength="20" autocomplete="off">
+            </div>
+          </div>
+        </div>
+        <div class="sec">
+          <p class="sec-title">聊天语气</p>
+          <p class="sec-desc">点选一个，或选「自定义」自己写</p>
+          <div id="psTones"></div>
+          <textarea id="psToneFree" rows="2" class="hidden" placeholder="用一句话描述想要的语气，如：像小猫一样软软的，爱撒娇…"></textarea>
+        </div>
+        <div class="sec">
+          <p class="sec-title">聊天风格</p>
+          <p class="sec-desc">点选一个，或选「自定义」自己写</p>
+          <div id="psStyles"></div>
+          <textarea id="psStyleFree" rows="2" class="hidden" placeholder="用一句话描述想要的风格，如：每天变着花样给我讲睡前小故事…"></textarea>
+        </div>
+      </div>
+      <div class="cfg-foot">
+        <div class="foot-info" id="psInfo"></div>
+        <div class="foot-spacer"></div>
+        <button id="psSave" class="btn-gold" style="flex:0 0 auto; padding:10px 22px;">保存人设</button>
+        <button id="psClose" class="btn-dim" style="flex:0 0 auto; padding:10px 22px;">关 闭</button>
       </div>
     </div>
   </div>
 
   <div id="modelPanel" class="cfgPanel hidden">
-    <div class="cfgCard">
-      <h3>模型配置</h3>
-      <div class="h3-sub">MODEL · 大脑接谁由你决定</div>
-      <label>API 配置（保存多个，点选切换使用）</label>
-      <div id="cfgProfiles"></div>
-      <label>配置名称</label>
-      <input id="cfgPName" placeholder="如：本地Ollama / DeepSeek" autocomplete="off">
-      <label>API 接口（OpenAI 兼容端点）</label>
-      <input id="cfgPUrl" placeholder="http://localhost:11434/v1/chat/completions" autocomplete="off">
-      <label>API Key（本地 Ollama 留空；云端填 sk-…）</label>
-      <input id="cfgPKey" type="password" placeholder="sk-..." autocomplete="off">
-      <label>大脑模型（文本模型即可，无需多模态）</label>
-      <input id="cfgPModel" list="cfgModelList" placeholder="qwen2.5:7b-instruct" autocomplete="off">
-      <datalist id="cfgModelList"></datalist>
-      <div class="cfgBtns">
-        <button id="cfgPSave" class="btn-dim">保存配置</button>
-        <button id="cfgPUse" class="btn-gold">设为当前</button>
-        <button id="cfgPDel" class="btn-dim">删除</button>
+    <div class="cfgCard wide">
+      <div class="cfg-loading hidden"><div class="spin-ring"></div><div class="loading-txt">加载中…</div></div>
+      <div class="cfg-head">
+        <h3>模型配置</h3>
+        <div class="h3-sub">大脑接谁由你决定</div>
+        <button class="cfg-close-x" id="modelCloseX" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
-      <button id="cfgPTest">测 试 连 接</button>
-      <div id="cfgTestResult"></div>
-      <label>人设提示词（决定她说话的风格，改完保存生效）</label>
-      <textarea id="cfgPrompt" rows="4" placeholder="你是电话里陪用户聊天的伙伴…"></textarea>
-      <div id="cfgInfo"></div>
-      <div class="cfgBtns">
-        <button id="cfgPromptSave" class="btn-gold">保存人设</button>
-        <button id="modelClose" class="btn-dim">关 闭</button>
+      <div class="cfg-body">
+        <div class="sec">
+          <p class="sec-title">API 配置</p>
+          <p class="sec-desc">保存多套，点选胶囊即可切换使用</p>
+          <div id="cfgProfiles"></div>
+          <div class="form-row">
+            <div>
+              <label>配置名称</label>
+              <input id="cfgPName" placeholder="如：本地Ollama / DeepSeek" autocomplete="off">
+            </div>
+            <div>
+              <label>大脑模型（文本模型即可）</label>
+              <input id="cfgPModel" list="cfgModelList" placeholder="qwen2.5:7b-instruct" autocomplete="off">
+            </div>
+            <div class="span2">
+              <label>API 接口（OpenAI 兼容端点）</label>
+              <input id="cfgPUrl" placeholder="http://localhost:11434/v1/chat/completions" autocomplete="off">
+            </div>
+            <div class="span2">
+              <label>API Key（本地 Ollama 留空；云端填 sk-…）</label>
+              <input id="cfgPKey" type="password" placeholder="sk-..." autocomplete="off">
+            </div>
+          </div>
+          <datalist id="cfgModelList"></datalist>
+          <div class="cfgBtns">
+            <button id="cfgPSave" class="btn-dim">保存配置</button>
+            <button id="cfgPUse" class="btn-gold">设为当前</button>
+          </div>
+          <button id="cfgPTest">测 试 连 接</button>
+          <div id="cfgTestResult"></div>
+          <div class="cfgBtns">
+            <button id="cfgPDel" class="btn-danger">删除所选配置</button>
+          </div>
+        </div>
+        <div class="sec">
+          <p class="sec-title">人设提示词</p>
+          <p class="sec-desc">决定她说话的风格，改完保存生效</p>
+          <textarea id="cfgPrompt" rows="4" placeholder="你是电话里陪用户聊天的伙伴…"></textarea>
+          <div class="cfgBtns" style="margin-top:10px">
+            <button id="cfgPromptSave" class="btn-gold">保存人设</button>
+          </div>
+        </div>
+      </div>
+      <div class="cfg-foot">
+        <div class="foot-info" id="cfgInfo"></div>
+        <div class="foot-spacer"></div>
+        <button id="modelClose" class="btn-dim" style="flex:0 0 auto; padding:10px 22px;">关 闭</button>
       </div>
     </div>
   </div>
 
   <div id="voicePanel" class="cfgPanel hidden">
     <div class="cfgCard">
-      <h3>音色配置</h3>
-      <div class="h3-sub">VOICE · 换个声音接电话</div>
-      <label>音色（models/ 下的 VITS 模型）</label>
-      <select id="cfgVoice"></select>
-      <label>说话人编号（多说话人音色如 fanchen-C 有 187 种声音，0 ~ N-1）</label>
-      <input id="cfgSid" type="number" min="0" placeholder="0" autocomplete="off">
-      <div id="voiceInfo"></div>
-      <div class="cfgBtns">
-        <button id="voiceSave" class="btn-gold">保 存</button>
-        <button id="voiceClose" class="btn-dim">关 闭</button>
+      <div class="cfg-loading hidden"><div class="spin-ring"></div><div class="loading-txt">加载中…</div></div>
+      <div class="cfg-head">
+        <h3>音色配置</h3>
+        <div class="h3-sub">换个声音接电话</div>
+        <button class="cfg-close-x" id="voiceCloseX" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="cfg-body">
+        <div class="sec">
+          <p class="sec-title">音色与说话人</p>
+          <div class="form-row">
+            <div>
+              <label>音色（models/ 下的 VITS 模型）</label>
+              <select id="cfgVoice"></select>
+            </div>
+            <div>
+              <label>说话人编号</label>
+              <input id="cfgSid" type="number" min="0" placeholder="0" autocomplete="off">
+            </div>
+          </div>
+          <p class="sec-desc" style="margin-top:8px">多说话人音色如 fanchen-C 有 187 种声音，编号范围 0 ~ N-1</p>
+        </div>
+      </div>
+      <div class="cfg-foot">
+        <div class="foot-info" id="voiceInfo"></div>
+        <div class="foot-spacer"></div>
+        <button id="voiceSave" class="btn-gold" style="flex:0 0 auto; padding:10px 22px;">保 存</button>
+        <button id="voiceClose" class="btn-dim" style="flex:0 0 auto; padding:10px 22px;">关 闭</button>
       </div>
     </div>
   </div>
 
   <div id="bgPanel" class="cfgPanel hidden">
-    <div class="cfgCard">
-      <h3>背景设置</h3>
-      <div class="h3-sub">BACKGROUND · 换个心情打电话</div>
-      <label>背景来源</label>
-      <div id="bgModes">
-        <button type="button" class="prof-item on" data-mode="builtin">内置金色</button>
-        <button type="button" class="prof-item" data-mode="wallpaper">Wallpaper 壁纸</button>
-        <button type="button" class="prof-item" data-mode="upload">本地上传</button>
-        <button type="button" class="prof-item" data-mode="url">图片 URL</button>
+    <div class="cfgCard wide">
+      <div class="cfg-head">
+        <h3>背景设置</h3>
+        <div class="h3-sub">换个心情打电话</div>
+        <button class="cfg-close-x" id="bgCloseX" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
-      <div id="bgWeRow" class="hidden">
-        <label>选择 Wallpaper 壁纸（不改电脑上的 Wallpaper Engine）</label>
-        <div id="weGrid"></div>
-        <div class="bg-tip">缩略图是各壁纸工程的官方预览图；动态壁纸在通话页里以静态画面呈现。列表来自本机已安装的 Wallpaper Engine。</div>
-      </div>
-      <div id="bgUrlRow" class="hidden">
-        <label>图片 URL</label>
-        <div class="bg-urlrow">
-          <input id="bgUrl" placeholder="https://…/wallpaper.jpg" autocomplete="off">
-          <button id="bgUrlApply" type="button" class="btn-gold">应用</button>
+      <div class="cfg-body">
+        <div class="sec">
+          <p class="sec-title">背景来源</p>
+          <div id="bgModes">
+            <button type="button" class="prof-item on" data-mode="builtin">内置金色</button>
+            <button type="button" class="prof-item" data-mode="wallpaper">Wallpaper 壁纸</button>
+            <button type="button" class="prof-item" data-mode="upload">本地上传</button>
+            <button type="button" class="prof-item" data-mode="url">图片 URL</button>
+          </div>
+          <div id="bgWeRow" class="hidden">
+            <label>选择 Wallpaper 壁纸（不改电脑上的 Wallpaper Engine）</label>
+            <div id="weGrid"></div>
+            <div class="bg-tip">缩略图是各壁纸工程的官方预览图；动态壁纸在通话页里以静态画面呈现。列表来自本机已安装的 Wallpaper Engine。</div>
+          </div>
+          <div id="bgUrlRow" class="hidden">
+            <label>图片 URL</label>
+            <div class="bg-urlrow">
+              <input id="bgUrl" placeholder="https://…/wallpaper.jpg" autocomplete="off">
+              <button id="bgUrlApply" type="button" class="btn-gold">应用</button>
+            </div>
+            <div class="bg-tip">直链图片最稳（.jpg/.png 结尾）；个别站点有防盗链会拒绝外链。</div>
+          </div>
+          <div id="bgUploadRow" class="hidden">
+            <label>本地图片</label>
+            <button id="bgUploadBtn" type="button">选择图片…</button>
+            <input id="bgUpload" type="file" accept="image/*" class="hidden">
+            <div class="bg-tip">图片只存在浏览器本地（IndexedDB），不会上传到任何服务器。</div>
+          </div>
         </div>
-        <div class="bg-tip">直链图片最稳（.jpg/.png 结尾）；个别站点有防盗链会拒绝外链。</div>
+        <div class="sec">
+          <p class="sec-title">界面布局</p>
+          <p class="sec-desc">金色圆盘 / 聊天记录 / 开麦·挂断按键 / 打字条均可拖动移位，双击圆盘或聊天区也能显示或隐藏</p>
+          <div class="cfgBtns" style="margin-top:12px">
+            <button id="layOrbToggle" class="btn-dim">圆盘 显示/隐藏</button>
+            <button id="laySubToggle" class="btn-dim">聊天 显示/隐藏</button>
+            <button id="layReset" class="btn-dim">恢复默认布局</button>
+          </div>
+        </div>
       </div>
-      <div id="bgUploadRow" class="hidden">
-        <label>本地图片</label>
-        <button id="bgUploadBtn" type="button">选择图片…</button>
-        <input id="bgUpload" type="file" accept="image/*" class="hidden">
-        <div class="bg-tip">图片只存在浏览器本地（IndexedDB），不会上传到任何服务器。</div>
-      </div>
-      <div id="bgInfo"></div>
-      <label>界面布局（金色圆盘 / 聊天记录 / 开麦·挂断按键 / 打字条均可拖动移位，双击圆盘或聊天区也能显示或隐藏）</label>
-      <div class="cfgBtns" style="margin-top:2px">
-        <button id="layOrbToggle" class="btn-dim">圆盘 显示/隐藏</button>
-        <button id="laySubToggle" class="btn-dim">聊天 显示/隐藏</button>
-        <button id="layReset" class="btn-dim">恢复默认布局</button>
-      </div>
-      <div class="cfgBtns">
-        <button id="bgClose" class="btn-dim">关 闭</button>
+      <div class="cfg-foot">
+        <div class="foot-info" id="bgInfo"></div>
+        <div class="foot-spacer"></div>
+        <button id="bgClose" class="btn-dim" style="flex:0 0 auto; padding:10px 22px;">关 闭</button>
       </div>
     </div>
   </div>
@@ -759,7 +938,7 @@ function layApply(key){   // 按存档恢复：有位置则浮起，没有则留
   placeFloat(el, s.x, s.y, s.cx, s.w);
 }
 function makeDraggable(el, key, opts = {}){
-  let sx = 0, sy = 0, ox = 0, oy = 0, down = false, moved = false, killClick = false;
+  let sx = 0, sy = 0, ox = 0, oy = 0, fw = 0, down = false, moved = false, killClick = false;
   el.addEventListener('click', e => {   // 真实拖完松手浏览器仍会派发一次 click：在这里吞掉，按键才不会拖完误触挂断/静音
     if (!killClick) return;
     killClick = false;
@@ -768,9 +947,20 @@ function makeDraggable(el, key, opts = {}){
   el.addEventListener('pointerdown', e => {
     if (e.button !== undefined && e.button !== 0) return;
     if (!opts.fromInput && e.target.closest('input, textarea')) return;   // 输入控件正常用（打字条传 fromInput：点住输入框也能拖）
-    down = true; moved = false; killClick = false;
+    down = true; moved = false; killClick = false; fw = 0;
     sx = e.clientX; sy = e.clientY;
-    const r = el.getBoundingClientRect(); ox = r.left; oy = r.top;
+    let r = el.getBoundingClientRect();
+    if (el.id === 'textrow' && !el.classList.contains('float-free')) {
+      // 默认位时打字条整行横跨全宽、输入框只是居中其中一段：必须拿可见的输入框当锚，
+      // 否则浮起瞬间按整行左上角落位，输入框会先跳到屏幕左边才开始跟手
+      const box = el.querySelector('.saybox');
+      if (box) {
+        const b = box.getBoundingClientRect(), pad = 6;   // pad = #textrow.float-free 的内边距，两边要一致
+        r = { left: b.left - pad, top: b.top - pad };
+        fw = b.width + pad * 2;                            // 浮起时锁住输入框原宽，松手存档也用它
+      }
+    }
+    ox = r.left; oy = r.top;
   });
   el.addEventListener('pointermove', e => {
     if (!down) return;
@@ -780,7 +970,19 @@ function makeDraggable(el, key, opts = {}){
       moved = true;
       try { el.setPointerCapture(e.pointerId); } catch (err) {}
       el.classList.add('dragging');
-      placeFloat(el, ox, oy);                // 从默认布局位拖出的瞬间浮起
+      // 同排按钮第一次拖出：把还在流里的兄弟按钮也在原位浮起，避免 flex 重排把它顶得跳一下（连带感）
+      // 之后两者都已是独立浮层，各自拖动互不影响
+      if (el.classList.contains('btn')) {
+        const row = el.parentElement;
+        if (row) row.querySelectorAll('button').forEach(b => {
+          if (b !== el && !b.classList.contains('float-free')) {
+            const rr = b.getBoundingClientRect();
+            b.classList.add('float-free');
+            placeFloat(b, rr.left, rr.top, false, rr.width);
+          }
+        });
+      }
+      placeFloat(el, ox, oy, false, fw);     // 从默认布局位拖出的瞬间浮起（fw 锁住输入框原宽，不跳不变样）
     }
     el.style.left = (ox + dx) + 'px'; el.style.top = (oy + dy) + 'px';
   });
@@ -828,6 +1030,20 @@ function layReset(){       // 恢复默认布局：清存档、回原位、重�
   for (const id of ['mute', 'hang', 'textrow']) {
     const b = $(id);
     b.style.cssText = ''; b.classList.remove('float-free', 'dragging');
+  }
+  layChatDefault();
+}
+/* 聊天记录框的默认位：桌宠模式 → 浮在宠物右侧（宠物回舞台时跟随）；否则回聊天区原位 */
+function layChatDefault(){
+  const s = layEl(SUB_KEY);
+  s.style.cssText = ''; s.classList.remove('float-drag', 'dragging');
+  if (petState.mode === 'pet' && !s.classList.contains('hidden')) {
+    const r = petEl.getBoundingClientRect();
+    if (r.width && r.height) {
+      s.classList.add('float-drag');
+      s.style.width = 'min(620px, 55vw)';
+      placeFloat(s, r.right + 18, r.top - 30, false, s.offsetWidth || 620);
+    }
   }
 }
 
@@ -1124,6 +1340,8 @@ const PET_MOODS = [
 const petEl = $('pet');
 let petState = { mode:'orb', kind:'cat', roam:false };
 let petMood = 'idle';
+let petModeBtn = false;          // 宠物形态被操作过才建 PetController，避免空宠物报错
+let petController = null;
 let petRoamTimer = null;      // 溜达间隔调度
 let petWalkFrame = null;      // 溜达滑行 rAF
 let petDragged = false;       // 拖过就认拖到的位置为新家
@@ -1142,7 +1360,10 @@ function petRenderSpriteFrame({ action, row, frame }) {
   el.style.backgroundPosition = (frame * 100 / 7) + '% ' + (row * 100 / 8) + '%';
 }
 
-const petController = new PetController({ onFrame: petRenderSpriteFrame });
+function petEnsureController(){   // 首次选宠物（或装上 Codex 宠物）时才初始化控制器
+  if (petController) return;
+  petController = new PetController({ onFrame: petRenderSpriteFrame });
+}
 
 function petSave(){ localStorage.setItem(PET_KEY, JSON.stringify(petState)); }
 function petHome(){ return petState.home && typeof petState.home.x === 'number' ? petState.home : null; }
@@ -1155,11 +1376,12 @@ function petMountDrawing(){   // 形态画稿挂载：整体重建 SVG 内容（
   const spr = petSpriteDef();
   petEl.classList.toggle('sprite-pet', !!spr);
   if (spr) {
+    petEnsureController();
     petEl.style.removeProperty('--pc'); petEl.style.removeProperty('--pc2');
     petEl.style.removeProperty('--pk'); petEl.style.removeProperty('--pl');
     petEl.innerHTML = '<div class="p-spr" data-state="idle"></div>';
     petSprApply(true);
-    petController.refresh();
+    if (petController) petController.refresh();
     return;
   }
   petEl.style.setProperty('--pc', k.pc);
@@ -1182,7 +1404,7 @@ function petSprApply(){
       const im = new Image();
       im.onload = () => {
         el.dataset.bgLoaded = full;
-        if (petSpriteDef() === spr) petController.refresh();
+        if (petSpriteDef() === spr && petController) petController.refresh();
       };
       im.onerror = () => { el.dataset.bgLoaded = 'err'; };
       im.src = full;
@@ -1190,13 +1412,13 @@ function petSprApply(){
     el.style.backgroundImage = 'url("' + full + '")';
   }
   petEl.classList.add('spr-on');
-  petController.refresh();
+  if (petController) petController.refresh();
 }
 
 function petSetMood(m){
   petMood = m;
   petEl.dataset.mood = m;
-  if (!petKindIsSprite(petState.kind)) return;
+  if (!petKindIsSprite(petState.kind) || !petController) return;
   const action = { happy:'jumping', sleep:'waiting', walk:'running' }[m];
   if (action) petController.trigger(action);
   else petController.setCallState(document.body.dataset.state || 'idle');
@@ -1220,17 +1442,19 @@ function petToHome(){    // 回它的存档窝（拖动过才有），没有就�
 
 function petApplyMode(){
   document.body.classList.toggle('pet-mode', petState.mode === 'pet');
-  if (petState.mode !== 'pet') { petStopRoam(); petSetMood('idle'); petToStage(); petRenderPanel(); return; }
+  if (petState.mode !== 'pet') { petStopRoam(); petSetMood('idle'); petToStage(); layChatDefault(); petRenderPanel(); return; }
+  petEnsureController();
   petMountDrawing();
-  if (petHome()) petToHome(); else petToStage();
+  petToStage();              // 重启 / 切换形态都先回舞台，聊天记录随后放到它右侧
   petSetMood('idle');
   petScheduleRoam();
   petIdleActs();
+  layChatDefault();
   petRenderPanel();
 }
 function petApplyKind(){
-  petMountDrawing();
-  petSetMood(petMood);   // 重建 DOM 后把 data-mood 重新套上（动画类全在 CSS 里）
+  petState.mode = (petState.kind === 'gold') ? 'orb' : 'pet';   // 金盘 ↔ 桌宠 形态联动
+  petApplyMode();                                                // 统一挂载画稿并应用模式
 }
 
 /* ---- Codex 宠物：从服务端拉安装列表 → 填进面板；当前选中项失效时回退到猫猫 ---- */
@@ -1437,13 +1661,16 @@ petEl.addEventListener('pointermove', e => {
     if (petWalkFrame) { cancelAnimationFrame(petWalkFrame); petWalkFrame = null; }
     petController.stopRoaming();
     petEl.classList.add('dragging');
+    // 锚点统一用视口坐标：舞台态 offsetLeft 是相对 #stage 的，漫游态才是视口系，
+    // 拎起瞬间不重锚的话，从舞台拖出会先向左上跳一段（差值 = 舞台在视口里的偏移）
+    const r = petEl.getBoundingClientRect();
     if (!petEl.classList.contains('roaming')) {
-      const r = petEl.getBoundingClientRect();
       petEl.classList.add('roaming');
-      petEl.style.left = r.left + 'px'; petEl.style.top = r.top + 'px';
       document.body.classList.add('pet-away');
       petAway = true;
     }
+    petEl.style.left = r.left + 'px'; petEl.style.top = r.top + 'px';
+    petDrag.ox = r.left; petDrag.oy = r.top;
   }
   petEl.style.left = Math.max(4, Math.min(petDrag.ox + dx, innerWidth - petEl.offsetWidth - 4)) + 'px';
   petEl.style.top = Math.max(4, Math.min(petDrag.oy + dy, innerHeight - petEl.offsetHeight - 4)) + 'px';
@@ -1485,21 +1712,22 @@ function petChipRow(boxId, items, activeId, onPick){
 }
 function petRenderPanel(){
   if ($('petPanel').classList.contains('hidden')) return;
-  petChipRow('petModes', [{ id:'orb', name:'🥇 金色圆盘' }, { id:'pet', name:'🐱 桌宠' }], petState.mode,
-    id => { petState.mode = id; petSave(); petApplyMode(); });
   petChipRow('petKinds', PET_KINDS, petState.kind,
     id => { petState.kind = id; petSave(); petApplyKind(); petRenderPanel(); });
-  const kinds = $('petKinds');
+  // 已安装 Codex 宠物：独立行式列表（名称 + 右侧删除），不再与内置宠物混流
+  const wrap = $('petInstalledWrap'), list = $('petInstalled');
+  wrap.classList.toggle('hidden', petSprites.length === 0);
+  list.innerHTML = '';
   petSprites.forEach(p => {
-    const group = document.createElement('span'); group.className = 'pet-kind-installed';
-    const pick = document.createElement('button'); pick.type = 'button';
-    pick.className = 'prof-item' + (petState.kind === 'codex:' + p.slug ? ' on' : '');
+    const row = document.createElement('span'); row.className = 'pet-installed-row'
+      + (petState.kind === 'codex:' + p.slug ? ' on' : '');
+    const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'pet-pick';
     pick.textContent = '🐾 ' + p.name;
     pick.onclick = () => { petState.kind = 'codex:' + p.slug; petSave(); petApplyKind(); petRenderPanel(); };
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'pet-kind-remove';
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'pet-remove';
     remove.textContent = '删除'; remove.title = '删除 ' + p.name;
     remove.onclick = () => petRemoveSprite(p.slug);
-    group.append(pick, remove); kinds.appendChild(group);
+    row.append(pick, remove); list.appendChild(row);
   });
   petChipRow('petMoods', PET_MOODS, petMood, id => petPerform(id));
   $('petRoamToggle').textContent = petState.roam ? '关闭溜达' : '开启溜达';
@@ -1512,16 +1740,14 @@ $('petInstallGo').onclick = () => {
   if (!input) { $('petInfo').textContent = '请填宠物 id 或 npm 安装命令'; return; }
   petInstallSprite(input);
 };
-$('petInstallMax').onclick = () => { $('petInstallId').value = 'max-chatgpt-pet'; petInstallSprite('max-chatgpt-pet'); };
 $('petBtn').onclick = () => {
-  ['modelPanel', 'voicePanel', 'personaPanel', 'bgPanel'].forEach(id => $(id).classList.add('hidden'));
-  $('petPanel').classList.remove('hidden');
-  petRenderPanel();
+  for (const id of ['modelPanel', 'voicePanel', 'personaPanel', 'bgPanel']) $(id).classList.add('hidden');
+  $('petPanel').classList.toggle('hidden');
+  if (!$('petPanel').classList.contains('hidden')) petRenderPanel();
+  setOpenCfg();
 };
-$('petClose').onclick = () => $('petPanel').classList.add('hidden');
-document.querySelectorAll('#petModes .prof-item').forEach(b => b.onclick = () => {
-  petState.mode = b.dataset.mode; petSave(); petApplyMode();
-});
+$('petClose').onclick = () => { $('petPanel').classList.add('hidden'); setOpenCfg(); };
+$('petCloseX').onclick = $('petClose').onclick;
 $('petRoamToggle').onclick = () => {
   petState.roam = !petState.roam; petSave();
   if (petState.roam) petStartRoam();
@@ -1534,57 +1760,74 @@ $('petRoamNow').onclick = () => { if (petState.mode === 'pet') petStartRoam(); }
 const _petStateObs = new MutationObserver(() => {
   const st = document.body.dataset.state;
   if (st === 'speaking') petEl.classList.add('talk'); else petEl.classList.remove('talk');
-  petController.setCallState(st || 'idle');
+  if (petController) petController.setCallState(st || 'idle');
 });
 _petStateObs.observe(document.body, { attributes:true, attributeFilter:['data-state'] });
+function petMoodSync(){ const st = document.body.dataset.state; petSetMood(st === 'speaking' ? 'happy' : (st === 'thinking' ? 'waiting' : 'idle')); }
 
-// 启动：恢复上次的宠物选择
+// 启动：恢复上次的宠物选择（形象 / 溜达开关照旧；窝不跨会话，重启回舞台默认位置）
 try {
   const savedPet = JSON.parse(localStorage.getItem(PET_KEY) || 'null');
-  if (savedPet) petState = {
-    mode: savedPet.mode === 'pet' ? 'pet' : 'orb',
-    kind: savedPet.kind || 'cat',
-    roam: !!savedPet.roam,
-    home: (savedPet.home && typeof savedPet.home.x === 'number') ? savedPet.home : null,
-  };
+  if (savedPet) {
+    delete savedPet.home;   // 拖动位置只在本次会话内生效
+    localStorage.setItem(PET_KEY, JSON.stringify(savedPet));
+    petState = {
+      // 金盘恒为圆盘、动物恒为桌宠：旧存档里 mode 与形态不一致时以形态为准
+      mode: savedPet.kind === 'gold' ? 'orb' : (savedPet.mode === 'pet' ? 'pet' : 'orb'),
+      kind: savedPet.kind || 'cat',
+      roam: !!savedPet.roam,
+    };
+  }
 } catch (e) {}
 petApplyMode();
 petRefreshSprites();   // 拉 Codex 宠物安装列表（含一键装的 Max）；装过的话开机即显示精灵宠物
 function startCall(){
   const my = ++callEpoch;
   document.body.dataset.state = 'dialing';
-  petController.setCallState('dialing');
+  if (petController) petController.setCallState('dialing');
   let c;
   c = new VoiceCall({
     url,   // VAD 参数用 voice-call.js 内置默认（M2：自适应停句+两阶段打断）
     on: {
-      state: m => { if (call !== c) return; document.body.dataset.state = m; petController.setCallState(m); $('state').textContent = STATE_TXT[m] || m; },
-      speech: active => { if (active) petController.trigger('waving'); },
+      state: m => { if (call !== c) return; document.body.dataset.state = m; if (petController) petController.setCallState(m); $('state').textContent = STATE_TXT[m] || m; },
+      speech: active => { if (active && petController) petController.trigger('waving'); },
       level: v => { if (call === c && !c.playing) rings(v, 14); },
       himLevel: v => { if (call === c && c.playing) rings(v, 3); },
       transcript: e => addSub('line-me', '我：' + e.text),
-      reply: e => { petController.trigger('review'); renderReply(e.text); },
-      error: e => { petController.trigger('failed'); addSub('line-zh', '⚠ ' + e); },
-      playbackComplete: () => { petController.trigger('jumping'); },
+      reply: e => { if (petController) petController.trigger('review'); renderReply(e.text); },
+      error: e => { if (petController) petController.trigger('failed'); addSub('line-zh', '⚠ ' + e); },
+      playbackComplete: () => { if (petController) petController.trigger('jumping'); },
       latency: ms => { $('lat').textContent = '开口 ' + ms + 'ms'; },
       hangupSoon: () => { if (call !== c) return; document.body.dataset.state = 'hangupSoon'; $('state').textContent = '道别中…'; },
-      config: e => { fillCfg(e); fillPersona(e.persona);
+      config: e => { fillCfg(e); fillPersona(e.persona); clearCfgLoading();
         if (voiceSaving) { voiceSaving = false; $('voiceInfo').textContent = '已保存 ✓ 音色立即生效'; }
         if (promptSaving) { promptSaving = false; $('cfgInfo').textContent = '已保存 ✓ 人设下次回复生效'; }
         if (psSaving) { psSaving = false; $('psInfo').textContent = '已保存 ✓ 下次回复生效'; }
         if (pendingUse) { pendingUse = false; $('cfgTestResult').textContent = '已切换 ✓ 大脑已换到该配置'; }  // profile_use 的回执（fillCfg 已把当前值刷进表单）
       },
       configError: e => {
+        clearCfgLoading();
         const msg = '⚠ ' + (e.error || '保存失败');
         if (voiceSaving) { voiceSaving = false; $('voiceInfo').textContent = msg; }
         else if (psSaving) { psSaving = false; $('psInfo').textContent = msg; }
         else { promptSaving = false; $('cfgInfo').textContent = msg; }
         // config_error 后服务端还会补发一条 config 快照，前端正常吃掉刷新表单即可
       },
-      profiles: e => { renderProfiles(e.profiles || [], e.active || ''); if (e.saved_id) selProfileId = e.saved_id;
-        $('cfgTestResult').textContent = e.saved_id ? '已保存 ✓ 列表已更新' : '';   // 清"保存中…"（saved_id 为空 = 删除操作）
+      profiles: e => { renderProfiles(e.profiles || [], e.active || '');
+        if (e.saved_id) { selProfileId = e.saved_id; $('cfgTestResult').textContent = '已保存 ✓ 列表已更新'; }
+        else if (e.fallback_active) {   // 删掉了正在用的配置：服务端已切回本地 Ollama，表单跟随 active
+          selProfileId = null;
+          const fb = (e.profiles || []).find(p => p.id === e.active);
+          if (fb) {
+            $('cfgPName').value = fb.name || ''; $('cfgPUrl').value = fb.url || '';
+            $('cfgPKey').value = fb.key || ''; $('cfgPModel').value = fb.model || '';
+          }
+          $('cfgTestResult').textContent = '已删除并自动切回本地 Ollama ✓';
+        }
+        else if (e.profiles && selProfileId) {   // 删掉的是非 active 配置：清除失效的选中态
+          if (!e.profiles.find(p => p.id === selProfileId)) { selProfileId = null; $('cfgTestResult').textContent = '已删除 ✓'; }
+        }
         if (pendingUse) { pendingUse = false; c._send({ type: 'profile_use', id: e.saved_id }); } },
-      profileError: e => { $('cfgTestResult').textContent = '⚠ ' + (e.error || '失败'); },
       profileTest: e => { $('cfgPTest').disabled = false; $('cfgPTest').textContent = '测 试 连 接';
         $('cfgTestResult').textContent = e.ok
           ? ('✅ 连接成功（' + e.latency_ms + 'ms）模型: ' + (e.model || '-') + '\n回复: ' + (e.reply || '(空)'))
@@ -1619,7 +1862,7 @@ function startCall(){
     window._hb = setInterval(() => { if (call) try { call._send({ type: 'ping' }); } catch (e) {} }, 25000);
   }).catch(e => {
     if (call !== c) return;
-    petController.trigger('failed');
+    if (petController) petController.trigger('failed');
     addSub('line-zh', '连接失败：' + e.message);
     document.body.dataset.state = 'closed';
     $('state').textContent = '连接失败';
@@ -1634,13 +1877,16 @@ document.addEventListener('pointerdown', () => {
   if (call && call.ctx && call.ctx.state === 'suspended') call.ctx.resume();
 }, true);
 
-// 自由布局生效：拖动移位 / 双击显示隐藏 / 面板重置，位置存 localStorage
+// 拖动移位 / 双击显示隐藏 / 面板重置，位置只在本次会话内记住，重启回默认位
 makeDraggable(document.querySelector('.orb-wrap'), ORB_KEY);
 makeDraggable($('sub'), SUB_KEY);
 makeDraggable($('mute'), MUTE_KEY);
 makeDraggable($('hang'), HANG_KEY);
 makeDraggable($('textrow'), TEXT_KEY, { fromInput: true });   // 打字条：点住输入框本身也能拖
+// 不跨会话记住位置：每次启动都清掉拖动存档，让所有可拖动控件回到默认布局位
+for (const k of [ORB_KEY, SUB_KEY, MUTE_KEY, HANG_KEY, TEXT_KEY]) localStorage.removeItem(k);
 layApply(ORB_KEY); layApply(SUB_KEY); layApply(MUTE_KEY); layApply(HANG_KEY); layApply(TEXT_KEY);
+layChatDefault();   // 聊天记录框：桌宠模式下跟随到宠物右侧
 addEventListener('resize', () => {   // 窗口缩放后把各浮层夹回屏幕内
   for (const k of [ORB_KEY, SUB_KEY, MUTE_KEY, HANG_KEY, TEXT_KEY]) {
     const s = layGet(k);
@@ -1708,7 +1954,7 @@ function renderProfiles(profiles, active){
     const b = document.createElement('button'); b.type = 'button';
     b.className = 'prof-item' + (p.id === active ? ' on' : '');
     b.title = p.url;
-    b.textContent = (p.id === active ? '✓ ' : '') + (p.name || p.model || p.id);
+    b.textContent = p.name || p.model || p.id;   // 选中勾选由 CSS .on::before 提供
     b.onclick = () => {
       selProfileId = p.id;
       $('cfgPName').value = p.name || '';
@@ -1717,7 +1963,16 @@ function renderProfiles(profiles, active){
       $('cfgPModel').value = p.model || '';
       $('cfgTestResult').textContent = '';
     };
-    box.appendChild(b);
+    // 本地 Ollama 是保底配置：只保留模型钮，不给删除钮（服务端也会拒绝删它）
+    if (p.id === 'p-local-ollama') { box.appendChild(b); return; }
+    const group = document.createElement('span'); group.className = 'prof-item-group';
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'prof-remove';
+    remove.textContent = '删除'; remove.title = '删除 ' + (p.name || p.id);
+    remove.onclick = () => {
+      if (!confirm('删除 API 配置「' + (p.name || p.id) + '」？')) return;
+      call._send({ type: 'profile_delete', id: p.id });
+    };
+    group.append(b, remove); box.appendChild(group);
   });
 }
 
@@ -1731,19 +1986,46 @@ function profileForm(){
   };
 }
 
-function togglePanel(panelId, otherIds, infoId){
+function setPanelLoading(panelId, on){
+  const mask = $(panelId).querySelector('.cfg-loading');
+  if (mask) mask.classList.toggle('hidden', !on);
+}
+function clearCfgLoading(){
+  setPanelLoading('modelPanel', false); setPanelLoading('voicePanel', false); setPanelLoading('personaPanel', false);
+}
+function togglePanel(panelId, infoId){
   const p = $(panelId); const willShow = p.classList.contains('hidden');
-  for (const o of otherIds) $(o).classList.add('hidden');
+  for (const id of ['modelPanel', 'voicePanel', 'personaPanel', 'bgPanel', 'petPanel']) {
+    if (id !== panelId) $(id).classList.add('hidden');
+  }
   p.classList.toggle('hidden');
   if (willShow) {
+    setPanelLoading(panelId, true);
     if (call) { $(infoId).textContent = '读取配置中…'; call._send({ type: 'config_get' }); }
-    else $(infoId).textContent = '未连接，无法读取配置';
+    else {
+      // 挂断态（无 WS）：改走 HTTP /v1/config 拉快照，模型/音色/人设弹窗照样能读到具体信息
+      $(infoId).textContent = '读取配置中…';
+      fetch('/v1/config' + (tok ? '?token=' + encodeURIComponent(tok) : ''), { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(e => { fillCfg(e); fillPersona(e.persona); setPanelLoading(panelId, false); if (panelId !== 'modelPanel') $(infoId).textContent = '已读取 ✓'; })
+        .catch(err => { setPanelLoading(panelId, false); $(infoId).textContent = '未连接，无法读取配置'; });
+    }
+  }
+  setOpenCfg();
+}
+/* 右上角工具条：当前打开的面板对应按钮淡金高亮 */
+const CFG_BTN_OF = { modelPanel:'modelBtn', voicePanel:'voiceBtn', personaPanel:'personaBtn', bgPanel:'bgBtn', petPanel:'petBtn' };
+function setOpenCfg(){
+  for (const panelId in CFG_BTN_OF) {
+    $(CFG_BTN_OF[panelId]).classList.toggle('open', !$(panelId).classList.contains('hidden'));
   }
 }
-$('modelBtn').onclick = () => togglePanel('modelPanel', ['voicePanel', 'personaPanel'], 'cfgInfo');
-$('voiceBtn').onclick = () => togglePanel('voicePanel', ['modelPanel', 'personaPanel'], 'voiceInfo');
-$('modelClose').onclick = () => $('modelPanel').classList.add('hidden');
-$('voiceClose').onclick = () => $('voicePanel').classList.add('hidden');
+$('modelBtn').onclick = () => togglePanel('modelPanel', 'cfgInfo');
+$('voiceBtn').onclick = () => togglePanel('voicePanel', 'voiceInfo');
+$('modelClose').onclick = () => { $('modelPanel').classList.add('hidden'); setOpenCfg(); };
+$('modelCloseX').onclick = $('modelClose').onclick;
+$('voiceClose').onclick = () => { $('voicePanel').classList.add('hidden'); setOpenCfg(); };
+$('voiceCloseX').onclick = $('voiceClose').onclick;
 $('cfgPSave').onclick = () => {
   if (!call) return;
   const f = profileForm();
@@ -1755,8 +2037,9 @@ $('cfgPUse').onclick = () => {
   if (!call) return;
   const f = profileForm();
   if (!f.name || !f.url) { $('cfgTestResult').textContent = '⚠ 配置名称和 API 地址必填'; return; }
-  pendingUse = true; $('cfgTestResult').textContent = '保存并切换中…';
-  call._send({ type: 'profile_save', profile: f });
+  $('cfgTestResult').textContent = '保存并切换中…';
+  setPanelLoading('modelPanel', true);
+  call._send({ type: 'profile_save', profile: f, use: true });
 };
 $('cfgPDel').onclick = () => {
   if (!call || !selProfileId) { $('cfgTestResult').textContent = '⚠ 先在列表里选一个配置'; return; }
@@ -1827,8 +2110,9 @@ function fillPersonaRedraw(){   // 点选后重画两组标签的选中态
   psChips('psTones', psOptions.tones, psPicked.tone, k => { psPicked.tone = k; psSyncFree(); fillPersonaRedraw(); });
   psChips('psStyles', psOptions.styles, psPicked.style, k => { psPicked.style = k; psSyncFree(); fillPersonaRedraw(); });
 }
-$('personaBtn').onclick = () => togglePanel('personaPanel', ['modelPanel', 'voicePanel'], 'psInfo');
-$('psClose').onclick = () => $('personaPanel').classList.add('hidden');
+$('personaBtn').onclick = () => togglePanel('personaPanel', 'psInfo');
+$('psClose').onclick = () => { $('personaPanel').classList.add('hidden'); setOpenCfg(); };
+$('psCloseX').onclick = $('psClose').onclick;
 $('psSave').onclick = () => {
   if (!call) return;
   psSaving = true; $('psInfo').textContent = '保存中…';
@@ -2016,11 +2300,9 @@ $('bgUpload').onchange = async () => {
   try { await idbSet('bg', f); } catch (e) { $('bgInfo').textContent = '⚠ 本地保存失败（本次预览不受影响）'; }
   await applyBg('upload', { blob: f });
 };
-$('bgBtn').onclick = () => {
-  $('modelPanel').classList.add('hidden'); $('voicePanel').classList.add('hidden'); $('personaPanel').classList.add('hidden');
-  $('bgPanel').classList.remove('hidden');
-};
-$('bgClose').onclick = () => $('bgPanel').classList.add('hidden');
+$('bgBtn').onclick = () => togglePanel('bgPanel', 'bgInfo');
+$('bgClose').onclick = () => { $('bgPanel').classList.add('hidden'); setOpenCfg(); };
+$('bgCloseX').onclick = $('bgClose').onclick;
 $('layOrbToggle').onclick = () => layToggle(ORB_KEY);
 $('laySubToggle').onclick = () => layToggle(SUB_KEY);
 $('layReset').onclick = () => { layReset(); $('bgInfo').textContent = '已恢复默认布局 ✓'; };

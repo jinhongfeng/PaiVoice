@@ -40,7 +40,7 @@
 | `packages/web-client/index.html` | **新增**：通话页（拨号/状态灯/金色圆盘音量/**双语字幕分轨渲染**/延迟显示/静音挂断/**人设面板**） |
 | `Dockerfile` | **新增**：Zeabur 部署用 |
 | `.env.example` | **重写**：全量 env 清单 |
-| `requirements.txt` | 移除 numpy（全包零引用）；**移除 pymysql**（记忆改 SQLite 标准库） |
+| `packages/realtime-core/requirements.txt` | 移除 numpy（全包零引用）；**移除 pymysql**（记忆改 SQLite 标准库） |
 | `tests/tts_cleanse_smoke.py` | **新增**：清洗层冒烟测试 |
 | `tests/test_five_track_memory.py` + `tests/smoke_memory.py` | **新增**：五轨记忆单测 + 端到端冒烟（无 MySQL） |
 
@@ -75,6 +75,48 @@
 
 右上角「宠物」面板直接管理当前用户的 `%USERPROFILE%\.codex\pets`。安装框既可填写宠物 id `kitagawa-marin`，也可粘贴完整命令 `npx codex-pet-installer add kitagawa-marin`；服务端会使用固定参数调用官方安装器，不会执行输入中的任意命令。已安装宠物旁的「删除」按钮会移除对应的 `%USERPROFILE%\.codex\pets\<id>` 目录；删除当前宠物后页面自动切回内置猫猫。
 
+## 三点七、桌面端（Electron）打包与隐私
+
+> 本仓库可打包成 Windows 一键安装的桌面应用（Electron 壳 + Python 后端 exe），
+> **开箱即全本地离线**：安装包不含任何密钥，无遥测，所有云端出口默认关闭。
+
+### 打包流程
+
+```bash
+# 前置：Node.js（≥18）、Python 虚拟环境已就绪（.venv，依赖见 `packages/realtime-core/requirements.txt`）
+npm install                # 拉 electron + electron-builder（仅在仓库根 package.json）
+npm run electron:pack      # = PyInstaller 打 server.exe/local_voice.exe → electron-builder 出 NSIS 安装包
+                           # 产物在 release/ 目录
+```
+
+内部结构（已随仓库提交，可直接复用）：
+
+| 文件 | 作用 |
+|---|---|
+| `electron/main.js` | 主进程：拉起后端两个 exe（spawn 子进程）、加载拨号页、退出时回收子进程 |
+| `electron-builder.yml` | 打包配置（仓库根；`files` 显式排除 `.env`；Windows NSIS 目标） |
+| `electron/preload.js` | 预加载占位（`contextIsolation` 开启，页面拿不到 Node 句柄） |
+| `electron/PRIVACY.md` | 面向用户的隐私声明（进安装包） |
+| `scripts/build_backend.ps1` | PyInstaller 打 `server.exe` + `local_voice.exe`（onefile、无控制台、不含 `.env`） |
+
+### 隐私加固（Electron 主进程默认注入，`electron/main.js`）
+
+| 项 | 加固值 | 效果 |
+|---|---|---|
+| `PAIVOICE_DATA_DIR` | `app.getPath('userData')`（如 `%APPDATA%\PaiVoice`） | 记忆库/persona/api_profiles 全部进应用数据目录，与程序分离；卸载不清，彻底删除 = 删该目录 |
+| `PAIVOICE_HOST` | `127.0.0.1` | 服务只绑本机回环，局域网其他设备无法直连 |
+| `PAIVOICE_ASR/TTS_PROVIDER` | `local` | 默认语音全走本机边车，云端 ASR/TTS 不启用 |
+| `PAIVOICE_SB_URL/SB_KEY/ARCHIVE_URL` | 空 | 不写 Supabase、不挂断归档，直到你在设置面板主动填写 |
+| `.env` | 打包排除 | 安装包里不存在你的密钥/网关地址/人设 |
+
+> 代码级网络出口清单（16 条，每条带源码行号）见 `electron/PRIVACY.md`——
+> 结论：默认链路 `浏览器 → server.exe(:8780) → local_voice.exe(:8792) / Ollama(:11434)` 全在本机。
+
+### 首次启动
+
+安装后第一次打开：设置面板里填你的网关（大脑）地址与模型（或保持默认空，用本地 Ollama）。
+云端 Key 只存 `%APPDATA%\PaiVoice\`，不回写 `.env`、不落入安装目录。
+
 ## 四、部署（Zeabur）
 
 1. 新建 Zeabur 项目 → 部署本仓库（自动识别 Dockerfile）
@@ -107,12 +149,15 @@
 ```
 语音聊天/
 ├── start.bat                  # Windows 双击启动入口
+├── package.json               # Electron 打包脚本（electron:dev / electron:pack / electron:dir）
+├── electron/                  # Electron 壳（main.js / preload.js / PRIVACY.md）
+├── electron-builder.yml       # 桌面打包配置（仓库根，Windows NSIS）
 ├── packages/
 │   ├── realtime-core/         # 通话核心（server.py + 清洗层 cleanse.py）
 │   ├── local-voice/           # 本地语音边车 local_voice.py（ASR+TTS，:8792）
 │   ├── web-client/            # 拨号页（index.html + voice-call.js）
 │   └── adapters/              # 外部适配器（tmux）
-├── scripts/                   # 启停脚本（run.ps1 / stop.ps1）
+├── scripts/                   # 启停脚本（run.ps1 / stop.ps1）+ 后端打包脚本（build_backend.ps1）
 ├── tools/                     # 维护工具（模型下载 / 试听样本生成 / 音色画像分析）
 ├── tests/                     # 测试与诊断脚本（冒烟 / 全链路 / mock API）
 ├── config/                    # 运行时配置（api_profiles.json 设置面板档案）

@@ -1,0 +1,12 @@
+{
+  "profiles": [
+    {
+      "id": "p-local-ollama",
+      "name": "本地Ollama",
+      "url": "http://localhost:11434/v1/chat/completions",
+      "key": "",
+      "model": "qwen2.5:7b-instruct"
+    }
+  ],
+  "active": "p-local-ollama"
+}
