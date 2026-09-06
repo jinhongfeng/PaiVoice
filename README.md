@@ -4,13 +4,11 @@
 >
 > **上游血统**：基于 [tianyupaipai-cmd/pai-voice](https://github.com/tianyupaipai-cmd/pai-voice)（AGPL-3.0，本仓库继承同协议）。感谢原作者的通话底座——VAD 参数和温和打断是实战调过的真金。
 >
-> 维护者：Jester · 2026-09-01
->
 > **本机全离线搭建**（Ollama + 本地 ASR/TTS，无需云端 Key）：见 [docs/本地搭建.md](docs/本地搭建.md)。
 
 ---
 
-## 一、架构：三层各司其职
+## 1、架构
 
 ```
 她（手机浏览器 / PWA 拨号页 packages/web-client/index.html）
@@ -30,7 +28,7 @@
 **大脑和历史的单一事实源在网关侧**：本服务每轮只发 `{call_session_id, transcript}`，
 不保存对话（仅挂断归档时暂存全文）。前端换、耳嘴换，网关不动——这是整个系统的设计基石。
 
-## 二、相对上游的魔改清单（维护必读）
+## 2、相对上游的魔改清单（维护必读）
 
 | 文件 | 改动 |
 |---|---|
@@ -46,7 +44,7 @@
 
 `packages/web-client/voice-call.js` **保持上游原样**（VAD/温和打断/播放队列/延迟秒表是实战参数，别动）。
 
-## 三、清洗层：语气中间协议（重要机制）
+## 3、清洗层：语气中间协议
 
 措辞（存在网关侧）里**只使用中间协议**：`[laughs]` `[sighs]` `[whispers]` / `(pause)` `(laughs)` `(sighs)`。
 本服务的 `split_for_tts()` 在合成前做两件事：
@@ -57,7 +55,7 @@
 **换 TTS 厂商的步骤**：`_TTS_DIALECT` 加该家映射 → `synthesize()` 加该家分支 → 跑 `tests/tts_cleanse_smoke.py`。措辞零改动。
 **顺序铁律**：markdown 清理必须在方言转换**之前**（否则会吃掉 MiniMax 的 `<#0.6#>` 原生标记——冒烟实测抓过）。
 
-## 三点五、人设定制（称呼 / 聊天语气 / 聊天风格）
+## 3.1、人设定制（称呼 / 聊天语气 / 聊天风格）
 
 通话页右上角「人设」面板可热改，存 `config/persona.json`，重启保留：
 
@@ -71,11 +69,11 @@
 实现：`_persona_directive()` 把上述字段拼成一条 system 指令，排在用户 SYSTEM_PROMPT 之前注入每轮请求
 （预设与自定义文本可叠加；全空则不注入，行为与原来完全一致）。链路测试：`python tests/test_persona.py`。
 
-## 三点六、Codex 桌宠管理
+## 3.2、Codex 桌宠管理
 
 右上角「宠物」面板直接管理当前用户的 `%USERPROFILE%\.codex\pets`。安装框既可填写宠物 id `kitagawa-marin`，也可粘贴完整命令 `npx codex-pet-installer add kitagawa-marin`；服务端会使用固定参数调用官方安装器，不会执行输入中的任意命令。已安装宠物旁的「删除」按钮会移除对应的 `%USERPROFILE%\.codex\pets\<id>` 目录；删除当前宠物后页面自动切回内置猫猫。
 
-## 三点七、桌面端（Electron）打包与隐私
+## 3.3、桌面端（Electron）打包与隐私
 
 > 本仓库可打包成 Windows 一键安装的桌面应用（Electron 壳 + Python 后端 exe），
 > **开箱即全本地离线**：安装包不含任何密钥，无遥测，所有云端出口默认关闭。
@@ -117,7 +115,7 @@ npm run electron:pack      # = PyInstaller 打 server.exe/local_voice.exe → el
 安装后第一次打开：设置面板里填你的网关（大脑）地址与模型（或保持默认空，用本地 Ollama）。
 云端 Key 只存 `%APPDATA%\PaiVoice\`，不回写 `.env`、不落入安装目录。
 
-## 四、部署（Zeabur）
+## 4、部署（Zeabur）
 
 1. 新建 Zeabur 项目 → 部署本仓库（自动识别 Dockerfile）
 2. 环境变量（真 Key 只放这里，绝不入库）：
@@ -138,13 +136,13 @@ npm run electron:pack      # = PyInstaller 打 server.exe/local_voice.exe → el
 3. 网关侧（另一仓库）需同步：`VOICE_LANE_ENABLED=1` + `VOICE_CALL_MODE_PROMPT`（电话模式措辞终版）
 4. 浏览器打开 `index.html`（静态托管或本地），填 `wss://<本服务域名>/voice/ws` + TOKEN → 接通
 
-## 五、网关侧约定（联调契约）
+## 5、网关侧约定（联调契约）
 
 - 分流：本服务所有请求 UA 带 `pai-voice`，body 带 `call_session_id`——网关据此进快车道
 - 首句全量：通话第一句时网关做全量上下文准备（含记忆检索），之后复用缓存；`[接通了]` 是接通标记（她刚接起，给第一声）
 - 归档：挂断时本服务 POST `transcript`（全文）到网关 `/v1/voice/archive` → 存 `voice_calls` 表（`pending_summary=true`），摘要由 K 自己写（C3 拍板）
 
-## 六、项目结构
+## 6、项目结构
 
 ```
 语音聊天/
@@ -168,12 +166,7 @@ npm run electron:pack      # = PyInstaller 打 server.exe/local_voice.exe → el
 └── 试听/                       # TTS 音色试听样本（wav + 音色画像 CSV）
 ```
 
-## 七、测试与升级
 
-- 清洗层冒烟：`python tests/tts_cleanse_smoke.py`（5/5 过为绿）
-- 升级上游 pai-voice 时对齐 §二 清单：server.py 是重写件（整体 diff），voice-call.js 取上游更新需回归字幕协议与打断行为
-- 协议变更史：措辞终版 v1.0（2026-09-01，aigroup id=95~103 决策链）
-
-## 八、许可
+## 7、许可
 
 AGPL-3.0（继承上游）。自部署自用。
