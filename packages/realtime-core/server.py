@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import struct
+import threading
 from enum import Enum
 
 from cleanse import split_for_tts, LineSegmenter
@@ -96,12 +97,12 @@ TONE_PRESETS = {
     "tender":  "语气黏人撒娇，偶尔拖长尾音，像女朋友打电话那样亲昵。",
     "lively":  "语气活泼元气，语速轻快，充满活力，爱开玩笑。",
     "calm":    "语气平静沉稳，从容淡定，给人可靠的安全感。",
-    "humorous": "语气幽默搞笑，爱玩梗抖包袱，正经不过三秒。",
+    "humorous": "默认语气幽默轻松，爱玩梗抖包袱，正经不过三秒；但用户一转严肃话题就切回认真口吻，就事论事。",
     "cold":    "语气高冷傲娇，嘴上嫌弃心里在乎，话少但句句戳心。",
     "custom":  "",
 }
 STYLE_PRESETS = {
-    "default": "",
+    "default": "默认风格能收能放：闲聊时像老朋友插科打诨、讲段子讲故事；用户正经探讨事情走向、分析人物性格时，先亮观点再给理由，有理有据不敷衍，聊完把话头抛回给用户。",
     "intimate": "像热恋期的情侣煲电话粥，聊日常琐事也带着甜蜜。",
     "playful":  "像青梅竹马斗嘴打闹，互怼互损但气氛轻松愉快。",
     "caring":   "像贴心家人嘘寒问暖，关心吃饭睡觉天气和心情。",
@@ -115,17 +116,19 @@ _STYLE_LABEL = {k: ("自定义" if k == "custom" else (v.strip("。")[:10] or "�
 
 def _load_persona() -> dict:
     p = {"pet_name": "", "his_name": "", "tone": "default", "style": "default",
-         "tone_free": "", "style_free": ""}
+         "tone_free": "", "style_free": "", "system_prompt": None}
     try:
         with open(PERSONA_FILE, "r", encoding="utf-8") as f:
             saved = json.load(f)
         if isinstance(saved, dict):
-            for k in p:
-                if k in ("tone", "style"):
-                    v = str(saved.get(k, p[k]) or p[k])
-                    p[k] = v if v in (TONE_PRESETS if k == "tone" else STYLE_PRESETS) else "default"
-                else:
-                    p[k] = str(saved.get(k, "") or "")[:50]
+            for k in ("pet_name", "his_name", "tone_free", "style_free"):
+                p[k] = str(saved.get(k, "") or "")[:50]
+            for k in ("tone", "style"):
+                v = str(saved.get(k, p[k]) or p[k])
+                p[k] = v if v in (TONE_PRESETS if k == "tone" else STYLE_PRESETS) else "default"
+            # 人设提示词整段持久化（模型面板保存后重启仍保持）；旧文件无此字段则置 None 用 .env 默认
+            saved_sp = saved.get("system_prompt")
+            p["system_prompt"] = saved_sp if isinstance(saved_sp, str) else None
     except Exception:
         pass
     return p
@@ -171,6 +174,9 @@ _PERSONA_HEADER = "【聊天语气与风格定制】"
 
 # 启动读盘，此后内存为准（config_set 即写回）
 _persona_state = _load_persona()
+# 模型面板保存过人设提示词后以存档为准（重启/刷新不再被 .env 默认值覆盖）
+if _persona_state.get("system_prompt") is not None:
+    SYSTEM_PROMPT = _persona_state["system_prompt"]
 
 CLIENT_UA = "pai-voice/0.1 (jester-build)"
 # 兼容模式（Gateway 未配置时的原 Adapter 路线）；GATEWAY_URL 优先
@@ -184,123 +190,59 @@ SB_URL = os.getenv("PAIVOICE_SB_URL", "")
 SB_KEY = os.getenv("PAIVOICE_SB_KEY", "")
 MAX_TURN_SECONDS = int(os.getenv("PAIVOICE_MAX_TURN_SECONDS", "60"))
 
-# --- 通话记忆（MySQL，hongfeng 连接）---
+# --- 五轨记忆（SQLite，标准库，Electron 打包零依赖）---
 # 直连普通 OpenAI 兼容 LLM（本地 Ollama 等）没有网关侧记忆，模型每轮天然失忆。
-# 把每轮对话落 MySQL、请求时回放最近历史作上下文——记忆跨通话、跨重启。
-# PAIVOICE_MYSQL_HOST 留空 = 不启用（零依赖，原行为不变）。
+# 把每轮对话落本地 SQLite（data/paivoice.db）、请求时回放最近历史作上下文——
+# 记忆跨通话、跨重启；后台空闲时模型自动总结出用户档案/长期记忆/项目记忆/今日日志。
+# v2 起不再依赖 MySQL（旧 PAIVOICE_MYSQL_* env 置空即停用；pymysql 已从 requirements 移除）。
+from memory_store import MemoryStore, DEFAULT_BRANCH
 from concurrent.futures import ThreadPoolExecutor
-import pymysql
+from memory_evolve import memory_loop, maybe_summarize
 
-MYSQL_HOST = os.getenv("PAIVOICE_MYSQL_HOST", "")
-MYSQL_PORT = int(os.getenv("PAIVOICE_MYSQL_PORT", "3306"))
-MYSQL_USER = os.getenv("PAIVOICE_MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("PAIVOICE_MYSQL_PASSWORD", "")
-MYSQL_DB = os.getenv("PAIVOICE_MYSQL_DB", "paivoice")
+DATA_DIR = os.getenv("PAIVOICE_DATA_DIR", "") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "data")
+GIT_ROOT = os.getenv("PAIVOICE_GIT_ROOT", "")
 MEMORY_TURNS = int(os.getenv("PAIVOICE_MEMORY_TURNS", "30"))  # 回放最近 N 条（user+assistant 合计）
-# 全部 MySQL 操作收拢到单线程：连接池无锁，user/assistant 两落库天然串行
-# （并发 INSERT 带 MAX 子查询会在 InnoDB 上互锁，1213 死锁实测抓过）
+# 自动进化引擎参数
+MEMORY_INTERVAL = float(os.getenv("PAIVOICE_MEMORY_INTERVAL", "600"))      # 后台检查间隔（秒）
+MEMORY_COOLDOWN = float(os.getenv("PAIVOICE_MEMORY_COOLDOWN", "300"))      # 距上次总结最小间隔（秒）
+MEMORY_MIN_TURNS = int(os.getenv("PAIVOICE_MEMORY_MIN_TURNS", "5"))        # 新轮 ≥ N 才值得总结
+MEMORY_SUMMARY_MODEL = os.getenv("PAIVOICE_MEMORY_SUMMARY_MODEL", "")      # 空 = 用 LLM_MODEL
+# 全部 SQLite 写收拢到单线程（与旧 MySQL 同哲学：串行化，无锁无死锁）
 _mem_exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="paivoice-mem")
-_mem_pool: list = []  # 极简连接池（只在 _mem_exec 线程里取用还）
+_mem_store = MemoryStore(DATA_DIR, GIT_ROOT)
 
 
 def _mem_enabled() -> bool:
-    return bool(MYSQL_HOST and MYSQL_DB)
+    """数据目录可写即启用（SQLite 总有兜底，几乎恒真）。"""
+    return True
 
 
-def _mem_conn():
-    """池里取一条连接（ping 复活断链）；池空则新建。只在 _mem_exec 线程跑。"""
-    while _mem_pool:
-        conn = _mem_pool.pop()
-        try:
-            conn.ping(reconnect=True)
-            return conn
-        except Exception:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    return pymysql.connect(
-        host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_USER, password=MYSQL_PASSWORD,
-        database=MYSQL_DB, charset="utf8mb4", autocommit=True,
-        connect_timeout=3, read_timeout=5, write_timeout=5,
-    )
-
-
-def _mem_release(conn) -> None:
-    """用完归还池（上限 4）；拿不出手的直接丢弃。只在 _mem_exec 线程跑。"""
-    if conn is None:
-        return
-    if len(_mem_pool) < 4:
-        _mem_pool.append(conn)
-    else:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-
-def _mem_write_turn(call_id: str, turn_id: str, role: str, text: str) -> None:
-    """借连接 → 落一行 → 还连接，整个过程独占（死锁免疫）。
-    1213 可重试：INSERT 带 MAX 子查询在 InnoDB 上偶发互锁（外部客户端持锁也会触发），
-    服务端报错原文就写着 try restarting transaction——重试一次几乎必成。"""
-    for attempt in (1, 2):
-        conn = _mem_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO voice_call_turns (call_session_id, turn_seq, turn_id, role, content) "
-                    "VALUES (%s, (SELECT COALESCE(MAX(t.turn_seq), 0) + 1 FROM "
-                    "(SELECT turn_seq FROM voice_call_turns WHERE call_session_id=%s) t), %s, %s, %s)",
-                    (call_id, call_id, turn_id, role, text[:4000]))
-            return
-        except pymysql.err.OperationalError as e:
-            if e.args and e.args[0] == 1213 and attempt == 1:
-                continue          # 死锁：回连接池重抽一条再来（连接已在 finally 归还）
-            raise
-        finally:
-            _mem_release(conn)
-
-
-async def _mem_save_turn(call_id: str, turn_id: str, role: str, text: str) -> None:
-    """单轮落库。记忆是锦上添花：失败只留日志，绝不影响通话主流程。"""
-    if not _mem_enabled() or not text:
+async def _mem_save_turn(call_id: str, turn_seq: int, turn_id: str, role: str, text: str) -> None:
+    """单轮落库（L0）。记忆是锦上添花：失败只留日志，绝不影响通话主流程。"""
+    if not text:
         return
     try:
         await asyncio.get_event_loop().run_in_executor(
-            _mem_exec, _mem_write_turn, call_id, turn_id, role, text)
+            _mem_exec, _mem_store.append_turn, call_id, turn_seq, turn_id, role, text)
     except Exception as e:
         print(f"[memory] save failed: {e}", flush=True)
 
 
-def _mem_load_history(call_id: str) -> list[dict]:
-    """回放最近 MEMORY_TURNS 条（id 升序）拼成 messages 历史。
+async def _mem_load_history(call_id: str) -> list[dict]:
+    """回放最近 MEMORY_TURNS 条（id 升序）拼成 messages 历史（L0 回放）。
     跨通话回放（不按 call_session_id 过滤）：每次拨号都是新 session，按 session 过滤
     等于一挂断就清零——长久记忆要的就是"她上次说过的事这次还记得"。call_id 参数保留
     是为了日志可读；当前通话的早前轮次也已实时落库，会自然出现在回放里。
-    同步毫秒级查询，仅新轮开始时调一次（经 _mem_exec 线程）。"""
+    同步毫秒级查询，仅新轮开始时调一次。"""
     if not _mem_enabled():
         return []
-    conn = None
     try:
-        conn = _mem_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT role, content FROM ("
-                "  SELECT id, role, content FROM voice_call_turns"
-                "  ORDER BY id DESC LIMIT %s"
-                ") recent ORDER BY id ASC", (MEMORY_TURNS,))
-            return [{"role": r, "content": c} for r, c in cur.fetchall()]
-    except pymysql.err.OperationalError as e:
-        if e.args and e.args[0] == 1213:   # 死锁：记忆回放是锦上添花，本轮少带历史不影响通
-            print("[memory] load deadlock, skip this turn's history", flush=True)
-            return []
-        print(f"[memory] load failed: {e}", flush=True)
-        return []
+        return await asyncio.get_event_loop().run_in_executor(
+            _mem_exec, _mem_store.load_recent, MEMORY_TURNS)
     except Exception as e:
         print(f"[memory] load failed: {e}", flush=True)
         return []
-    finally:
-        _mem_release(conn)
 
 # 自然挂断（COVE §16 / M2）：告别词命中 → 正常生成告别回复 → 前端播完（playback_idle）+
 # 宽限期她没再开口 → 请前端挂断收线；全程硬截止，超时强制关连接（归档统一走 finally）。
@@ -568,16 +510,23 @@ async def _call_gateway(http: aiohttp.ClientSession, turn: dict, metrics: dict |
     persona_sys = _persona_directive(_persona_state)
     if persona_sys:
         messages.append({"role": "system", "content": persona_sys})
+    # 五轨记忆块（L1/L3/L4 + 当前分支 L2）在中间：读失败静默，只读不写
+    mem_block = _memory_block()
+    if mem_block:
+        print(f"[memory] inject block {len(mem_block)} chars (branch={_mem_store.current_branch()})", flush=True)
+        messages.append({"role": "system", "content": mem_block})
     if SYSTEM_PROMPT:
         messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    # 通话记忆：直连 LLM（Ollama 等）时网关不帮忙记历史，从 MySQL 回放最近几轮，
+    # 通话记忆：直连 LLM（Ollama 等）时网关不帮忙记历史，从 SQLite 回放最近几轮，
     # 否则模型每轮都失忆。只对网关模式生效；保存发生在 reply 落定后（见下）。
     history = []
     if _mem_enabled():
         loop = asyncio.get_event_loop()
-        # 记忆读写同走 _mem_exec 单线程：回放若用默认池，会和落库并发共用
-        # 同一条池化连接，pymysql 协议错位直接崩掉整个 answer_turn 任务
-        history = await loop.run_in_executor(_mem_exec, _mem_load_history, turn["call_session_id"])
+        # 记忆读写同走 _mem_exec 单线程（回放与落库串行，无协议错位风险）。
+        # _mem_load_history 本身是 async 包装：run_in_executor 里直接跑同步 store 读，
+        # 避免"协程对象不可迭代"（外层 await 已展开）。
+        history = await loop.run_in_executor(
+            _mem_exec, lambda cid=turn["call_session_id"]: _mem_store.load_recent(MEMORY_TURNS))
         messages.extend(history)
         print(f"[memory] replay {len(history)} turns for call={turn['call_session_id']}", flush=True)
     messages.append({"role": "user", "content": turn["transcript"]})
@@ -654,12 +603,13 @@ async def _call_gateway(http: aiohttp.ClientSession, turn: dict, metrics: dict |
     # 防呆：剥掉模型思考块（qwen3 等默认 thinking 模型的 ＜think＞…＜/think＞），
     # 否则思考内容会被 TTS 念出来。全角/半角尖括号都处理。
     reply = re.sub(r"[<＜]think[>＞].*?[<＜]/think[>＞]", "", reply, flags=re.S).strip()
-    # 记忆写入：她这一问 + 他这一答 成对落 MySQL（后台任务，不阻塞返回）
+    # 记忆写入（L0）：她这一问 + 他这一答 成对落 SQLite（后台任务，不阻塞返回）
     if _mem_enabled():
+        turn_seq = turn.get("turn_seq", 0)
         asyncio.get_event_loop().create_task(_mem_save_turn(
-            turn["call_session_id"], turn["turn_id"], "user", turn["transcript"]))
+            turn["call_session_id"], turn_seq, turn["turn_id"], "user", turn["transcript"]))
         asyncio.get_event_loop().create_task(_mem_save_turn(
-            turn["call_session_id"], turn["turn_id"], "assistant", reply))
+            turn["call_session_id"], turn_seq, turn["turn_id"], "assistant", reply))
     return reply
 
 
@@ -863,6 +813,53 @@ async def log_metrics(call: "Call", turn_seq: int, turn_id: str, generation_id: 
         print(f"[metrics] error: {e}", flush=True)
 
 
+_active_calls = 0                      # 自动进化引擎的空闲判定：>0 表示有通话在跑
+_active_calls_lock = threading.Lock()
+
+
+def _memory_block() -> str:
+    """五轨记忆块 → 单条 system 指令（L1/L3/L4 + 当前分支 L2，各段有字数预算）。
+    全部为空返回 ""（不注入）；读失败静默。"""
+    try:
+        store = _mem_store
+        branch = store.current_branch()
+        today = store.read_today()
+        profile = store.read_profile(limit=60)
+        longterm = store.read_longterm(limit=200)
+        project = store.read_project(branch)
+
+        today_txt = today.get("summary", "") or ""
+        if today.get("topics"):
+            today_txt = (today_txt + "；主题：" + "、".join(today["topics"])) if today_txt else "主题：" + "、".join(today["topics"])
+        today_txt = today_txt[:MEM_BUDGET_TODAY]
+        profile_txt = "；".join(
+            f"{p['fact']}" + (f"（{p['category']}）" if p.get("category") else "")
+            for p in profile)[:MEM_BUDGET_PROFILE]
+        longterm_txt = "；".join(f"{e['event']}" + (f"（{e['date']}）" if e.get("date") else "") for e in longterm)[:MEM_BUDGET_LONGTERM]
+        project_txt = "；".join(f"{p['fact']}" for p in project)[:MEM_BUDGET_PROJECT]
+
+        blocks = []
+        if today_txt:
+            blocks.append(f"【今日日志】{today_txt}")
+        if profile_txt:
+            blocks.append(f"【用户档案】{profile_txt}")
+        if longterm_txt:
+            blocks.append(f"【长期记忆】{longterm_txt}")
+        if project_txt:
+            blocks.append(f"【项目关键记忆·分支 {branch}】{project_txt}")
+        return "\n".join(blocks)
+    except Exception as e:
+        print(f"[memory] block failed: {e}", flush=True)
+        return ""
+
+
+# 记忆块字数预算（env 可调）：闲聊 max_tokens=384，记忆块必须小
+MEM_BUDGET_TODAY = int(os.getenv("PAIVOICE_MEM_BUDGET_TODAY", "200"))
+MEM_BUDGET_PROFILE = int(os.getenv("PAIVOICE_MEM_BUDGET_PROFILE", "600"))
+MEM_BUDGET_LONGTERM = int(os.getenv("PAIVOICE_MEM_BUDGET_LONGTERM", "800"))
+MEM_BUDGET_PROJECT = int(os.getenv("PAIVOICE_MEM_BUDGET_PROJECT", "600"))
+
+
 class CallState(str, Enum):
     """M1.5-3：会话显式状态机（闻序蓝图八态的 M1.5 子集；RECONNECTING 等归 M2 断线续接）。
     状态只描述"此刻谁占着话筒"，接收循环的响应速度与状态无关（生成任务已后台化）。"""
@@ -1063,7 +1060,12 @@ async def graceful_hangup(ws, call: Call) -> None:
 
 
 async def session(ws) -> None:
+    global LLM_MODEL, SYSTEM_PROMPT, GATEWAY_URL, GATEWAY_TOKEN   # config_set / profile_use 运行时热改
     call = Call()
+    # 自动进化空闲判定：通话在跑就 +1（finally 里 -1），后台总结引擎只在 0 时才跑
+    global _active_calls
+    with _active_calls_lock:
+        _active_calls += 1
     # 鉴权 token 兼容两种传递：start 消息内 token 字段，或拨号 URL 的 ?token=xxx
     url_token = ""
     try:
@@ -1151,8 +1153,8 @@ async def session(ws) -> None:
                 elif kind == "config_get":
                     await send(ws, await _config_snapshot(http))
                 elif kind == "config_set":
-                    # 设置面板：运行时更换 API 接口 / 大脑模型 / 音色 / 人设提示词（无需重启）
-                    global LLM_MODEL, SYSTEM_PROMPT, GATEWAY_URL, GATEWAY_TOKEN
+                    # 设置面板：运行时更换 API 接口 / 大脑模型 / 音色 / 人设提示词（无需重启）。
+                    # LLM_MODEL/SYSTEM_PROMPT/GATEWAY_URL/GATEWAY_TOKEN 在函数级声明 global（见函数开头）。
                     err = None
                     if "gateway_url" in event:
                         GATEWAY_URL = str(event.get("gateway_url") or "").strip()
@@ -1174,6 +1176,9 @@ async def session(ws) -> None:
                         if sp.startswith(_PERSONA_HEADER):
                             sp = sp.split("\n", 1)[1].strip() if "\n" in sp else ""
                         SYSTEM_PROMPT = sp
+                        # 人设提示词持久化：与称呼/语气/风格同一存档，重启后仍保持
+                        _persona_state["system_prompt"] = sp
+                        _save_persona(_persona_state)
                     if "persona" in event:
                         ok_p, perr = _apply_persona_patch(event.get("persona") or {})
                         if not ok_p:
@@ -1220,15 +1225,40 @@ async def session(ws) -> None:
                         _save_profiles(prof)
                         await send(ws, {"type": "profiles", "profiles": prof["profiles"],
                                         "active": prof["active"], "saved_id": pid})
+                        # 「设为当前」：切换大脑后立刻回发完整快照，前端据它刷新表单并收尾加载动画
+                        if str(event.get("use") or ""):
+                            prof["active"] = pid
+                            _save_profiles(prof)
+                            GATEWAY_URL = url
+                            GATEWAY_TOKEN = key
+                            LLM_MODEL = model
+                            print(f"[profile] use {name} -> {GATEWAY_URL} model={LLM_MODEL}", flush=True)
+                            await send(ws, await _config_snapshot(http))
                 elif kind == "profile_delete":
                     pid = str(event.get("id") or "")
                     prof = _load_profiles()
+                    # 本地 Ollama 是保底配置（无 Key 离线可跑），前端不给删除钮，服务端双保险拒绝
+                    if pid == "p-local-ollama":
+                        await send(ws, {"type": "profile_error", "error": "本地 Ollama 是保底配置，不能删除"})
+                        continue
+                    if not any(x.get("id") == pid for x in prof["profiles"]):
+                        await send(ws, {"type": "profile_error", "error": "配置不存在"})
+                        continue
+                    # 删的是正在用的配置：先自动切回本地 Ollama，避免 active 悬空导致大脑失联
+                    fallback = prof["active"] == pid
+                    if fallback:
+                        ollama = next((x for x in prof["profiles"] if x.get("id") == "p-local-ollama"), None)
+                        if ollama:
+                            GATEWAY_URL = ollama.get("url", "")
+                            GATEWAY_TOKEN = ollama.get("key", "")
+                            LLM_MODEL = ollama.get("model", "")
+                            prof["active"] = "p-local-ollama"
+                            print(f"[profile] active deleted -> fallback to 本地Ollama url={GATEWAY_URL} model={LLM_MODEL}", flush=True)
                     prof["profiles"] = [x for x in prof["profiles"] if x.get("id") != pid]
-                    if prof["active"] == pid:
-                        prof["active"] = ""
                     _save_profiles(prof)
                     await send(ws, {"type": "profiles", "profiles": prof["profiles"],
-                                    "active": prof["active"], "saved_id": ""})
+                                    "active": prof["active"], "saved_id": "",
+                                    "fallback_active": fallback})
                 elif kind == "profile_use":
                     pid = str(event.get("id") or "")
                     prof = _load_profiles()
@@ -1282,6 +1312,8 @@ async def session(ws) -> None:
                         call.turns.clear()  # 归档成功才清；失败不清空——当前仅保留到会话销毁（归档重试另行实现）
                 except Exception as e:
                     print(f"[archive] error: {e}", flush=True)
+            with _active_calls_lock:
+                _active_calls = max(0, _active_calls - 1)   # 会话结束：归还空闲计数（后台总结可跑了）
 
 
 def _wallpaper_bytes() -> tuple[bytes | None, str]:
@@ -1977,6 +2009,23 @@ async def main() -> None:
                     ("cache-control", "no-store"),
                     ("access-control-allow-origin", "*"),
                 ]), body)
+            if path == "/v1/config":   # 挂断/未接通时，设置面板的配置快照走 HTTP 通路（WS 断开也能看）
+                if TOKEN:   # 与 WS 鉴权同源：设置过令牌就要求带 ?token=（页面自己会带）
+                    from urllib.parse import urlparse, parse_qs
+                    q = parse_qs(urlparse(request.path).query)
+                    if (q.get("token") or [""])[0] != TOKEN:
+                        return Response(401, "Unauthorized", Headers([
+                            ("content-type", "text/plain"),
+                        ]), b"unauthorized")
+                async with aiohttp.ClientSession() as http:
+                    snap = await _config_snapshot(http)
+                body = json.dumps(snap, ensure_ascii=False).encode("utf-8")
+                return Response(200, "OK", Headers([
+                    ("content-type", "application/json; charset=utf-8"),
+                    ("content-length", str(len(body))),
+                    ("cache-control", "no-store"),
+                    ("access-control-allow-origin", "*"),
+                ]), body)
             m = re.fullmatch(r"/v1/pets/([a-z0-9-]+)/(pet\.json|asset)", path)
             if m:   # 宠物静态文件（清单 / 精灵图）
                 data, ctype = _pet_file(m.group(1), m.group(2))
@@ -2001,7 +2050,25 @@ async def main() -> None:
     async with serve(session, HOST, PORT, max_size=None, process_request=process_request,
                      ping_interval=25, ping_timeout=120):  # 手机+VPN 链路抖动大，放宽保活判定
         print(f"PaiVoice listening on ws://{HOST}:{PORT}", flush=True)
-        await asyncio.Future()
+        # 自动进化后台任务：每 MEMORY_INTERVAL 检查（空闲+冷却+新轮才总结，失败静默）
+        async with aiohttp.ClientSession() as mem_http:
+            evolve_task = asyncio.create_task(memory_loop(
+                _mem_store, mem_http, lambda: {
+                    "active_calls": _active_calls,
+                    "gateway_url": GATEWAY_URL,
+                    "gateway_token": GATEWAY_TOKEN,
+                    "model": MEMORY_SUMMARY_MODEL or LLM_MODEL,
+                    "min_turns": MEMORY_MIN_TURNS,
+                    "cooldown": MEMORY_COOLDOWN,
+                }, interval=MEMORY_INTERVAL))
+            try:
+                await asyncio.Future()
+            finally:
+                evolve_task.cancel()
+                try:
+                    await evolve_task
+                except BaseException:
+                    pass
 
 
 if __name__ == "__main__":

@@ -34,12 +34,15 @@
 
 | 文件 | 改动 |
 |---|---|
-| `packages/realtime-core/server.py` | **重写**：ASR 加 siliconflow；Adapter 加 **gateway 模式**（OpenAI+SSE，UA=`pai-voice/0.1` 供网关分流）；新增**清洗层 `split_for_tts()`**；新增**挂断归档** `archive_call()`；移除无用 numpy；新增**人设定制**（称呼/聊天语气/聊天风格 → system 指令，`config/persona.json` 持久化） |
+| `packages/realtime-core/server.py` | **重写**：ASR 加 siliconflow；Adapter 加 **gateway 模式**（OpenAI+SSE，UA=`pai-voice/0.1` 供网关分流）；新增**清洗层 `split_for_tts()`**；新增**挂断归档** `archive_call()`；移除无用 numpy；新增**人设定制**（称呼/聊天语气/聊天风格 → system 指令，`config/persona.json` 持久化）；**记忆改 SQLite 五轨 + 自动进化**（配合 `memory_store.py` / `memory_evolve.py`，去掉 MySQL 依赖） |
+| `packages/realtime-core/memory_store.py` | **新增**：五轨记忆 SQLite 存储层（`turns`/`today_log`/`project_memory`/`profile`/`longterm`/`meta`，标准库零依赖） |
+| `packages/realtime-core/memory_evolve.py` | **新增**：自动进化引擎——后台空闲时用大脑模型把新对话蒸馏进用户档案/长期记忆/今日日志/当前分支项目记忆，`persona_suggestion` 供人设面板参考 |
 | `packages/web-client/index.html` | **新增**：通话页（拨号/状态灯/金色圆盘音量/**双语字幕分轨渲染**/延迟显示/静音挂断/**人设面板**） |
 | `Dockerfile` | **新增**：Zeabur 部署用 |
 | `.env.example` | **重写**：全量 env 清单 |
-| `requirements.txt` | 移除 numpy（全包零引用） |
+| `requirements.txt` | 移除 numpy（全包零引用）；**移除 pymysql**（记忆改 SQLite 标准库） |
 | `tests/tts_cleanse_smoke.py` | **新增**：清洗层冒烟测试 |
+| `tests/test_five_track_memory.py` + `tests/smoke_memory.py` | **新增**：五轨记忆单测 + 端到端冒烟（无 MySQL） |
 
 `packages/web-client/voice-call.js` **保持上游原样**（VAD/温和打断/播放队列/延迟秒表是实战参数，别动）。
 
@@ -62,8 +65,8 @@
 |---|---|
 | 怎么称呼你（`pet_name`） | 他的**每一轮回复都必须**用这个昵称叫你（融进句子，不许生硬） |
 | 他叫什么（`his_name`） | 他自称 / 你喊他的名字 |
-| 聊天语气（`tone`） | 预设：默认 / 温柔体贴 / 黏人撒娇 / 活泼元气 / 平静沉稳 / 幽默搞笑 / 高冷傲娇 / 自定义 |
-| 聊天风格（`style`） | 预设：默认 / 情侣煲粥 / 斗嘴打闹 / 嘘寒问暖 / 小剧场 / 惜字如金 / 自定义 |
+| 聊天语气（`tone`） | 预设：默认 / 温柔体贴 / 黏人撒娇 / 活泼元气 / 平静沉稳 / 幽默轻松（严肃话题自动转认真）/ 高冷傲娇 / 自定义 |
+| 聊天风格（`style`） | 预设：默认（闲聊插科打诨 + 正经探讨先亮观点给理由）/ 情侣煲粥 / 斗嘴打闹 / 嘘寒问暖 / 小剧场 / 惜字如金 / 自定义 |
 
 实现：`_persona_directive()` 把上述字段拼成一条 system 指令，排在用户 SYSTEM_PROMPT 之前注入每轮请求
 （预设与自定义文本可叠加；全空则不注入，行为与原来完全一致）。链路测试：`python tests/test_persona.py`。
