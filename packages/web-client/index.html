@@ -752,6 +752,7 @@
           <datalist id="cfgModelList"></datalist>
           <div class="cfgBtns">
             <button id="cfgPSave" class="btn-dim">保存配置</button>
+            <button id="cfgPNew" class="btn-dim" title="清空表单；保存时会新增一条配置，不覆盖已有的">新增配置</button>
             <button id="cfgPUse" class="btn-gold">设为当前</button>
           </div>
           <button id="cfgPTest">测 试 连 接</button>
@@ -1924,6 +1925,9 @@ let cfgData = null, selProfileId = null, pendingUse = false, promptSaving = fals
 
 function fillCfg(e){
   cfgData = e;
+  // 每次拉到配置快照（打开弹窗/切换后），清掉上一次点胶囊留下的选中态——
+  // 否则表单里改几个字段再保存，会悄悄覆盖上次选中的那条配置（用户视角就是"原来的没了"）
+  selProfileId = null;
   // 大脑当前值 -> 表单（新增配置时以此为默认）
   $('cfgPUrl').value = e.gateway_url || '';
   $('cfgPKey').value = e.gateway_token || '';
@@ -2030,8 +2034,16 @@ $('cfgPSave').onclick = () => {
   if (!call) return;
   const f = profileForm();
   if (!f.name || !f.url) { $('cfgTestResult').textContent = '⚠ 配置名称和 API 地址必填'; return; }
-  $('cfgTestResult').textContent = '保存中…';
+  // 有选中 = 更新那条；没选中 = 新增一条（后端按 id 匹配，空 id 走 append）
+  $('cfgTestResult').textContent = selProfileId ? '保存中…（更新所选配置）' : '保存中…（新增配置）';
   call._send({ type: 'profile_save', profile: f });
+};
+$('cfgPNew').onclick = () => {
+  selProfileId = null;
+  $('cfgPName').value = ''; $('cfgPUrl').value = '';
+  $('cfgPKey').value = ''; $('cfgPModel').value = '';
+  $('cfgTestResult').textContent = '新配置：填好后点「保存配置」会新增一条，不影响已有配置';
+  $('cfgPName').focus();
 };
 $('cfgPUse').onclick = () => {
   if (!call) return;
